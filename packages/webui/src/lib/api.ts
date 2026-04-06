@@ -76,6 +76,7 @@ export const api = {
   health: () => apiFetch<HealthStatus>("/health"),
   status: () => apiFetch<SystemStatus>("/api/status"),
   config: () => apiFetch<Record<string, unknown>>("/api/config"),
+  configRaw: () => apiFetch<{ yaml: string }>("/api/config/raw"),
 
   saveConfig: (yaml: string) =>
     apiFetch<{ ok: boolean }>("/api/config", {

@@ -272,7 +272,15 @@ async function startWebUI() {
       const { rename } = await import("fs/promises");
       await rename(tmpPath, CONFIG_PATH);
 
-      bufferLog("info", "Config updated via WebUI");
+      // Reload in-memory config and restart services
+      // (fs.watch may not fire on Docker bind mounts)
+      const newConfig = await loadAndValidateConfig();
+      state.config = newConfig;
+      await startObserver(newConfig);
+      await startProxy(newConfig);
+      await deployAgents(newConfig);
+
+      bufferLog("info", "Config updated via WebUI — services reloaded");
       return { ok: true };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -522,6 +530,7 @@ function watchConfig() {
       try {
         const newConfig = await loadAndValidateConfig();
         state.config = newConfig;
+        await startObserver(newConfig);
         await startProxy(newConfig);
         await deployAgents(newConfig);
         bufferLog("info", "Reload complete");

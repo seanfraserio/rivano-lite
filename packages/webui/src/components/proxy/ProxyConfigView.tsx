@@ -61,6 +61,52 @@ const ACTION_STYLES: Record<string, string> = {
   tag: "bg-text-muted/20 text-text-muted",
 };
 
+/**
+ * Extract provider API keys from raw YAML on disk (simple line parser).
+ * Returns { providerName: "real-key-value" } for providers that have api_key set.
+ */
+function extractKeysFromYaml(rawYaml: string): Record<string, string> {
+  const keys: Record<string, string> = {};
+  const lines = rawYaml.split("\n");
+  let currentProvider = "";
+  let inProviders = false;
+
+  for (const line of lines) {
+    if (/^providers:/.test(line)) { inProviders = true; continue; }
+    if (inProviders && /^\S/.test(line)) { inProviders = false; continue; }
+    if (!inProviders) continue;
+
+    const providerMatch = line.match(/^ {2}(\w+):$/);
+    if (providerMatch) { currentProvider = providerMatch[1]; continue; }
+
+    const keyMatch = line.match(/^ {4}api_key:\s*(.+)/);
+    if (keyMatch && currentProvider) {
+      keys[currentProvider] = keyMatch[1].replace(/^["']|["']$/g, "");
+    }
+  }
+  return keys;
+}
+
+/**
+ * Merge visual-mode changes into the raw YAML, preserving API keys
+ * that are masked in the UI but present in the file.
+ */
+function mergeVisualIntoYaml(rawYaml: string, config: ProxyConfig): string {
+  const realKeys = extractKeysFromYaml(rawYaml);
+
+  const merged: ProxyConfig = {
+    ...config,
+    providers: config.providers?.map((p) => {
+      if (p.api_key?.startsWith("****") && realKeys[p.name]) {
+        return { ...p, api_key: realKeys[p.name] };
+      }
+      return p;
+    }),
+  };
+
+  return configToRivanoYaml(merged);
+}
+
 function configToRivanoYaml(config: ProxyConfig): string {
   const lines: string[] = ['version: "1"', ""];
 
@@ -69,12 +115,8 @@ function configToRivanoYaml(config: ProxyConfig): string {
   if (config.providers?.length) {
     for (const p of config.providers) {
       lines.push(`  ${p.name}:`);
-      if (p.api_key) {
-        // Use env var reference for masked keys, quote raw keys
-        const keyVal = p.api_key.startsWith("****")
-          ? `\${${p.name.toUpperCase()}_API_KEY}`
-          : `"${p.api_key}"`;
-        lines.push(`    api_key: ${keyVal}`);
+      if (p.api_key && !p.api_key.startsWith("****")) {
+        lines.push(`    api_key: "${p.api_key}"`);
       }
       if (p.base_url) lines.push(`    base_url: "${p.base_url}"`);
       if (p.models?.length) {
@@ -704,14 +746,16 @@ export function ProxyConfigView() {
     };
   }
 
-  // Load config on mount
+  // Load config on mount — use raw YAML to preserve API keys
   useEffect(() => {
     async function load() {
       try {
+        const { yaml: rawYaml } = await api.configRaw();
+        setYaml(rawYaml);
+        // Also parse for visual mode
         const data = await api.config();
         const parsed = transformApiConfig(data);
         setConfig(parsed);
-        setYaml(configToRivanoYaml(parsed));
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load config");
@@ -762,7 +806,22 @@ export function ProxyConfigView() {
   async function handleApply() {
     setSaving(true);
     try {
-      const currentYaml = mode === "yaml" ? yaml : configToRivanoYaml(config);
+      let currentYaml: string;
+      if (mode === "yaml") {
+        currentYaml = yaml;
+      } else {
+        // Visual mode: check if any providers have masked keys
+        const hasMaskedKeys = config.providers?.some(
+          (p) => p.api_key?.startsWith("****")
+        );
+        if (hasMaskedKeys) {
+          // Merge visual changes into raw YAML to preserve real API keys
+          const { yaml: rawYaml } = await api.configRaw();
+          currentYaml = mergeVisualIntoYaml(rawYaml, config);
+        } else {
+          currentYaml = configToRivanoYaml(config);
+        }
+      }
       await api.saveConfig(currentYaml);
       showToast("Config saved — reloading...", "success");
     } catch (err) {
