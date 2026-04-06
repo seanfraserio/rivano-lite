@@ -186,22 +186,41 @@ export function TracesView() {
                   trace.spans.reduce((sum, s) => sum + (s.estimatedCostUsd || 0), 0);
                 const isSelected = selectedId === trace.id;
 
+                // Derive action from first span's metadata
+                const action = (trace.spans[0]?.metadata as Record<string, unknown> | undefined)?.action as string | undefined;
+                const isBlocked = action === "blocked";
+                const isWarned = action === "warned";
+
                 return (
                   <button
                     key={trace.id}
                     onClick={() => setSelectedId(trace.id)}
-                    className={`w-full text-left px-4 py-2.5 border-b border-border-light transition-colors ${
+                    className={`w-full text-left px-4 py-2.5 border-b transition-colors ${
                       isSelected
-                        ? "bg-rivano-500/10 border-l-2 border-l-rivano-400"
-                        : "hover:bg-bg-hover/50"
+                        ? isBlocked
+                          ? "bg-error/10 border-l-2 border-l-error"
+                          : "bg-rivano-500/10 border-l-2 border-l-rivano-400"
+                        : isBlocked
+                          ? "bg-error/5 border-b-error/20 hover:bg-error/10"
+                          : "border-b-border-light hover:bg-bg-hover/50"
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-mono text-xs text-text-primary">
+                        <span className={`font-mono text-xs ${isBlocked ? "text-error" : "text-text-primary"}`}>
                           {trace.id.slice(0, 8)}
                         </span>
-                        {trace.source && (
+                        {isBlocked && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-error/20 text-error font-medium">
+                            blocked
+                          </span>
+                        )}
+                        {isWarned && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-warning/20 text-warning font-medium">
+                            warned
+                          </span>
+                        )}
+                        {trace.source && !isBlocked && !isWarned && (
                           <span className="px-1.5 py-0.5 rounded text-[10px] bg-bg-hover text-text-muted truncate max-w-[80px]">
                             {trace.source}
                           </span>
@@ -215,7 +234,7 @@ export function TracesView() {
                       <span className="text-[11px] text-text-muted tabular-nums">
                         {trace.spans.length} span{trace.spans.length !== 1 ? "s" : ""}
                       </span>
-                      <span className="text-[11px] text-text-secondary tabular-nums">
+                      <span className={`text-[11px] tabular-nums ${isBlocked ? "text-error/70" : "text-text-secondary"}`}>
                         {formatDuration(duration)}
                       </span>
                       {cost > 0 && (
