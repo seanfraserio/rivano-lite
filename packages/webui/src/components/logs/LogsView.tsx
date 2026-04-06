@@ -32,17 +32,26 @@ export function LogsView() {
 
   useEffect(() => {
     let active = true;
+    let lastTimestamp = "";
 
     async function poll() {
       try {
-        const res = await fetch("/api/logs");
+        const url = lastTimestamp
+          ? `/api/logs?since=${encodeURIComponent(lastTimestamp)}`
+          : "/api/logs";
+        const res = await fetch(url);
         if (!res.ok) throw new Error("fetch failed");
-        const data: LogEntry[] = await res.json();
-        if (!active) return;
+        const data = await res.json();
+        const entries: LogEntry[] = data.logs ?? [];
+        if (!active || entries.length === 0) {
+          if (active) setConnected(true);
+          return;
+        }
 
+        lastTimestamp = entries[entries.length - 1].timestamp;
         setConnected(true);
         setLogs((prev) => {
-          const merged = [...prev, ...data];
+          const merged = [...prev, ...entries];
           return merged.length > MAX_LINES
             ? merged.slice(merged.length - MAX_LINES)
             : merged;

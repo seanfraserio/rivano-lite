@@ -92,7 +92,17 @@ async function startProxy(config: RivanoConfig) {
   if (state.proxy) {
     await state.proxy.close();
   }
-  state.proxy = await createProxyServer(config.proxy, config.providers);
+  state.proxy = await createProxyServer(config.proxy, config.providers, {
+    onTrace: (trace) => {
+      if (state.storage) {
+        try {
+          state.storage.insertTrace(trace);
+        } catch (err) {
+          bufferLog("error", `Failed to store trace: ${err}`);
+        }
+      }
+    },
+  });
   await state.proxy.listen({ port: config.proxy.port, host: "0.0.0.0" });
   bufferLog("info", `Proxy gateway listening on :${config.proxy.port}`);
   console.log(`[rivano] Proxy gateway listening on :${config.proxy.port}`);
@@ -224,7 +234,16 @@ async function startWebUI() {
   }));
 
   // ── Config read ────────────────────────────────────────────
-  app.get("/api/config", async () => state.config);
+  app.get("/api/config", async () => {
+    const masked = JSON.parse(JSON.stringify(state.config));
+    for (const [, provider] of Object.entries(masked.providers || {})) {
+      const p = provider as Record<string, unknown>;
+      if (p.api_key && typeof p.api_key === "string") {
+        p.api_key = p.api_key.length > 8 ? "****" + p.api_key.slice(-4) : "****";
+      }
+    }
+    return masked;
+  });
 
   app.get("/api/config/raw", async () => {
     const raw = await readFile(CONFIG_PATH, "utf-8");

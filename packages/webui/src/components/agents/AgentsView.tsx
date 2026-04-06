@@ -61,15 +61,28 @@ export function AgentsView() {
       }));
 
       // Merge with config data if available
-      const configAgents = (configRes as { agents?: AgentConfig[] }).agents;
-      if (Array.isArray(configAgents)) {
-        for (const ca of configAgents) {
+      // API returns agents as { name, model: { provider, name, temperature, max_tokens }, system_prompt }
+      const rawAgents = (configRes as { agents?: Array<Record<string, unknown>> }).agents;
+      if (Array.isArray(rawAgents)) {
+        for (const raw of rawAgents) {
+          const m = (raw.model ?? {}) as Record<string, unknown>;
+          const ca: AgentConfig = {
+            name: raw.name as string,
+            description: (raw.description as string) || "",
+            provider: (m.provider as string) || "anthropic",
+            model: (m.name as string) || "",
+            temperature: (m.temperature as number) ?? 1.0,
+            max_tokens: (m.max_tokens as number) ?? 4096,
+            system_prompt: (raw.system_prompt as string) || "",
+          };
           const existing = agentList.find((a) => a.name === ca.name);
           if (existing) {
-            existing.description = ca.description || "";
-            existing.temperature = ca.temperature ?? 1.0;
-            existing.max_tokens = ca.max_tokens ?? 4096;
-            existing.system_prompt = ca.system_prompt || "";
+            existing.description = ca.description;
+            existing.provider = ca.provider;
+            existing.model = ca.model;
+            existing.temperature = ca.temperature;
+            existing.max_tokens = ca.max_tokens;
+            existing.system_prompt = ca.system_prompt;
           } else {
             agentList.push({
               ...ca,

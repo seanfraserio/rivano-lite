@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyReply } from "fastify";
-import type { ProxyConfig, ProviderConfig, PipelineContext, Provider } from "@rivano/core";
+import type { ProxyConfig, ProviderConfig, PipelineContext, Provider, Trace } from "@rivano/core";
 import { Pipeline } from "./pipeline.js";
 import { createRateLimitMiddleware } from "./middleware/rate-limit.js";
 import { createInjectionMiddleware } from "./middleware/injection.js";
@@ -15,9 +15,14 @@ interface ProxyStats {
   startedAt: number;
 }
 
+export interface ProxyOptions {
+  onTrace?: (trace: Trace) => void;
+}
+
 export function createProxyServer(
   config: ProxyConfig,
   providers: Record<string, ProviderConfig>,
+  options?: ProxyOptions,
 ): FastifyInstance {
   const app = Fastify({ logger: true });
   const stats: ProxyStats = { requests: 0, cacheHits: 0, blocks: 0, startedAt: Date.now() };
@@ -37,7 +42,7 @@ export function createProxyServer(
   const responsePipeline = new Pipeline([
     createCacheMiddleware(config.cache),
     createPolicyMiddleware(config.policies, "response"),
-    createAuditMiddleware(),
+    createAuditMiddleware({ onTrace: options?.onTrace }),
   ]);
 
   app.get("/health", async () => {

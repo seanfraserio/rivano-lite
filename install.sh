@@ -215,7 +215,11 @@ case "${1:-help}" in
       exit 1
     fi
     shift
-    docker logs ${1:---follow --tail 100} "$CONTAINER"
+    if [ $# -eq 0 ]; then
+      docker logs --follow --tail 100 "$CONTAINER"
+    else
+      docker logs "$@" "$CONTAINER"
+    fi
     ;;
 
   config)

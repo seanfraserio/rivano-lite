@@ -632,12 +632,54 @@ export function ProxyConfigView() {
     setToast({ message, type });
   }, []);
 
+  // Transform API response (object-shaped) to component format (array-shaped)
+  function transformApiConfig(data: Record<string, unknown>): ProxyConfig {
+    const providers: Provider[] = [];
+    const rawProviders = (data.providers ?? {}) as Record<string, Record<string, unknown>>;
+    for (const [name, cfg] of Object.entries(rawProviders)) {
+      providers.push({
+        name,
+        type: name,
+        api_key: cfg.api_key as string | undefined,
+        base_url: cfg.base_url as string | undefined,
+        models: cfg.models as string[] | undefined,
+        enabled: true,
+      });
+    }
+
+    const proxy = (data.proxy ?? {}) as Record<string, unknown>;
+    const rawPolicies = (proxy.policies ?? []) as Array<Record<string, unknown>>;
+    const policies: Policy[] = rawPolicies.map((p) => ({
+      name: p.name as string,
+      phase: (p.on as "request" | "response") ?? "request",
+      condition: JSON.stringify(p.condition ?? {}),
+      action: p.action as Policy["action"],
+      description: p.message as string | undefined,
+    }));
+
+    const cache = proxy.cache as Record<string, unknown> | undefined;
+    const rateLimit = proxy.rate_limit as Record<string, unknown> | undefined;
+
+    return {
+      providers,
+      policies,
+      cache: cache ? {
+        enabled: (cache.enabled as boolean) ?? false,
+        ttl_seconds: (cache.ttl as number) ?? 3600,
+      } : { enabled: false, ttl_seconds: 3600 },
+      rate_limit: rateLimit ? {
+        requests_per_minute: (rateLimit.requests_per_minute as number) ?? 60,
+        burst: (rateLimit.burst as number) ?? 10,
+      } : { requests_per_minute: 60, burst: 10 },
+    };
+  }
+
   // Load config on mount
   useEffect(() => {
     async function load() {
       try {
         const data = await api.config();
-        const parsed = data as unknown as ProxyConfig;
+        const parsed = transformApiConfig(data);
         setConfig(parsed);
         setYaml(configToYaml(parsed));
         setError(null);
