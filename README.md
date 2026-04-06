@@ -1,6 +1,18 @@
-# Rivano Lite
+<p align="center">
+  <img src="packages/webui/public/logo.svg" alt="Rivano" width="80" height="80" />
+</p>
 
-**Open source, self-hosted AI operations platform.**
+<h1 align="center">Rivano Lite</h1>
+
+<p align="center"><strong>Open source, self-hosted AI operations platform.</strong></p>
+
+<p align="center">
+  <a href="https://rivano.ai">Website</a> &middot;
+  <a href="https://rivano.ai/docs">Docs</a> &middot;
+  <a href="https://rivano.ai/pricing">Cloud</a>
+</p>
+
+---
 
 Rivano Lite gives you the core [Rivano](https://rivano.ai) experience locally — an AI proxy with governance, observability with tracing, and agent deployment — all in a single container.
 
