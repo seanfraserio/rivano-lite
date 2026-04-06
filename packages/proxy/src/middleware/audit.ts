@@ -2,6 +2,21 @@ import type { PipelineContext, PipelineResult, AuditEntry, Trace, Span } from "@
 import type { Middleware } from "../pipeline.js";
 import { appendFileSync } from "node:fs";
 
+const MODEL_PRICING: Record<string, { inPer1M: number; outPer1M: number }> = {
+  "claude-opus-4-6": { inPer1M: 15, outPer1M: 75 },
+  "claude-sonnet-4-5": { inPer1M: 3, outPer1M: 15 },
+  "claude-haiku-4-5": { inPer1M: 0.8, outPer1M: 4 },
+  "gpt-4o": { inPer1M: 2.5, outPer1M: 10 },
+  "gpt-4o-mini": { inPer1M: 0.15, outPer1M: 0.6 },
+  "o3-mini": { inPer1M: 1.1, outPer1M: 4.4 },
+};
+const DEFAULT_PRICING = { inPer1M: 1, outPer1M: 3 };
+
+function estimateCost(model: string, tokensIn: number, tokensOut: number): number {
+  const p = MODEL_PRICING[model] ?? DEFAULT_PRICING;
+  return Math.round(((tokensIn / 1_000_000) * p.inPer1M + (tokensOut / 1_000_000) * p.outPer1M) * 1_000_000) / 1_000_000;
+}
+
 interface AuditConfig {
   output?: "stdout" | "file";
   path?: string;
@@ -33,6 +48,10 @@ export function createAuditMiddleware(config?: AuditConfig): Middleware {
       const now = Date.now();
       const latencyMs = now - ctx.startTime;
 
+      const tokensIn = (ctx.metadata.tokensIn as number) ?? 0;
+      const tokensOut = (ctx.metadata.tokensOut as number) ?? 0;
+      const costUsd = tokensIn + tokensOut > 0 ? estimateCost(ctx.model, tokensIn, tokensOut) : 0;
+
       const entry: AuditEntry = {
         id: ctx.id,
         timestamp: now,
@@ -42,9 +61,9 @@ export function createAuditMiddleware(config?: AuditConfig): Middleware {
         action: deriveAction(ctx),
         reason: ctx.metadata.blockReason as string | undefined,
         latencyMs,
-        tokensIn: ctx.metadata.tokensIn as number | undefined,
-        tokensOut: ctx.metadata.tokensOut as number | undefined,
-        costUsd: ctx.metadata.costUsd as number | undefined,
+        tokensIn: tokensIn || undefined,
+        tokensOut: tokensOut || undefined,
+        costUsd: costUsd || undefined,
       };
 
       const line = JSON.stringify(entry);
