@@ -10,7 +10,7 @@
 ### Install
 
 ```bash
-git clone https://github.com/rivano-ai/rivano-lite.git
+git clone https://github.com/seanfraserio/rivano-lite.git
 cd rivano-lite
 bun install
 ```

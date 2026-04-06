@@ -19,8 +19,17 @@ Rivano Lite gives you the core [Rivano](https://rivano.ai) experience locally â€
 ## Quick Start
 
 ```bash
-curl -fsSL https://get.rivano.ai | sh
+curl -fsSL https://raw.githubusercontent.com/seanfraserio/rivano-lite/main/install.sh | sh
 rivano start
+```
+
+Or run directly with Docker:
+
+```bash
+docker run -d --name rivano-lite \
+  -p 9000:9000 -p 4000:4000 -p 4100:4100 \
+  -v ~/.rivano:/data \
+  ghcr.io/seanfraserio/rivano-lite:latest
 ```
 
 Then open [http://localhost:9000](http://localhost:9000) to configure your providers and start proxying.
@@ -36,19 +45,6 @@ Then open [http://localhost:9000](http://localhost:9000) to configure your provi
 
 - Docker (Docker Desktop on macOS, or Docker Engine on Linux)
 - macOS (Intel or Apple Silicon) or Linux (amd64 or arm64)
-
-## Manual Install
-
-```bash
-# Pull and run directly
-docker run -d --name rivano-lite \
-  -p 9000:9000 -p 4000:4000 -p 4100:4100 \
-  -v ~/.rivano:/data \
-  ghcr.io/rivano-ai/rivano-lite:latest
-
-# Open the WebUI
-open http://localhost:9000
-```
 
 ## Configuration
 
@@ -85,16 +81,21 @@ agents:
     system_prompt: "You are a helpful assistant."
 ```
 
-## CLI Commands
+## Management
 
 ```bash
-rivano start       # Start the container
-rivano stop        # Stop the container
-rivano status      # Show health and stats
-rivano logs        # Stream container logs
-rivano config      # Open WebUI in browser
-rivano update      # Pull latest image and restart
-rivano uninstall   # Remove container, image, and CLI
+docker logs -f rivano-lite     # Stream logs
+docker stop rivano-lite        # Stop
+docker start rivano-lite       # Restart
+docker rm -f rivano-lite       # Remove
+
+# Update to latest version
+docker pull ghcr.io/seanfraserio/rivano-lite:latest
+docker rm -f rivano-lite
+docker run -d --name rivano-lite \
+  -p 9000:9000 -p 4000:4000 -p 4100:4100 \
+  -v ~/.rivano:/data \
+  ghcr.io/seanfraserio/rivano-lite:latest
 ```
 
 ## Connect Your App

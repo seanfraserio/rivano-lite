@@ -11,7 +11,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: rivano-ai/rivano-lite
+  IMAGE_NAME: seanfraserio/rivano-lite
 
 jobs:
   release:

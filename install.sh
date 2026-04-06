@@ -3,7 +3,7 @@
 # Usage: curl -fsSL https://get.rivano.ai | sh
 set -e
 
-REPO="rivano-ai/rivano-lite"
+REPO="seanfraserio/rivano-lite"
 IMAGE="ghcr.io/${REPO}"
 INSTALL_DIR="/usr/local/bin"
 DATA_DIR="$HOME/.rivano"
@@ -98,7 +98,7 @@ cat > "$TEMP_CLI" << 'CLIEOF'
 # Rivano Lite CLI — thin wrapper around Docker
 set -e
 
-IMAGE="ghcr.io/rivano-ai/rivano-lite"
+IMAGE="ghcr.io/seanfraserio/rivano-lite"
 CONTAINER="rivano-lite"
 DATA_DIR="$HOME/.rivano"
 VERSION="0.1.0"
@@ -316,7 +316,7 @@ Proxy:
   Point your AI SDK at http://localhost:4000/v1
 
 Documentation:
-  https://github.com/rivano-ai/rivano-lite
+  https://github.com/seanfraserio/rivano-lite
 
 Upgrade to Rivano Cloud:
   https://rivano.ai
@@ -408,6 +408,6 @@ cat << EOF
     Point your AI SDK at http://localhost:4000/v1
 
   Documentation:
-    https://github.com/rivano-ai/rivano-lite
+    https://github.com/seanfraserio/rivano-lite
 
 EOF

@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/rivano-ai/rivano-lite.git"
+    "url": "https://github.com/seanfraserio/rivano-lite.git"
   },
   "scripts": {
     "build": "turbo build",

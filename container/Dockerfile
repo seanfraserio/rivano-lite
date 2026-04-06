@@ -73,7 +73,7 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
 
 LABEL org.opencontainers.image.title="Rivano Lite" \
       org.opencontainers.image.description="Open source, self-hosted AI operations platform" \
-      org.opencontainers.image.url="https://github.com/rivano-ai/rivano-lite" \
-      org.opencontainers.image.source="https://github.com/rivano-ai/rivano-lite" \
+      org.opencontainers.image.url="https://github.com/seanfraserio/rivano-lite" \
+      org.opencontainers.image.source="https://github.com/seanfraserio/rivano-lite" \
       org.opencontainers.image.vendor="Rivano AI" \
       org.opencontainers.image.licenses="MIT"
