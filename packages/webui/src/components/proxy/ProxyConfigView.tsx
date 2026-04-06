@@ -69,7 +69,13 @@ function configToRivanoYaml(config: ProxyConfig): string {
   if (config.providers?.length) {
     for (const p of config.providers) {
       lines.push(`  ${p.name}:`);
-      if (p.api_key) lines.push(`    api_key: ${p.api_key}`);
+      if (p.api_key) {
+        // Use env var reference for masked keys, quote raw keys
+        const keyVal = p.api_key.startsWith("****")
+          ? `\${${p.name.toUpperCase()}_API_KEY}`
+          : `"${p.api_key}"`;
+        lines.push(`    api_key: ${keyVal}`);
+      }
       if (p.base_url) lines.push(`    base_url: "${p.base_url}"`);
       if (p.models?.length) {
         lines.push("    models:");
