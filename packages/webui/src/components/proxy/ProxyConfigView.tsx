@@ -61,50 +61,74 @@ const ACTION_STYLES: Record<string, string> = {
   tag: "bg-text-muted/20 text-text-muted",
 };
 
-function configToYaml(config: ProxyConfig): string {
-  // Simple YAML serializer for the config structure
-  const lines: string[] = [];
+function configToRivanoYaml(config: ProxyConfig): string {
+  const lines: string[] = ['version: "1"', ""];
 
+  // Providers (object format, not array)
+  lines.push("providers:");
   if (config.providers?.length) {
-    lines.push("providers:");
     for (const p of config.providers) {
-      lines.push(`  - name: ${p.name}`);
-      lines.push(`    type: ${p.type}`);
-      if (p.base_url) lines.push(`    base_url: ${p.base_url}`);
+      lines.push(`  ${p.name}:`);
       if (p.api_key) lines.push(`    api_key: ${p.api_key}`);
+      if (p.base_url) lines.push(`    base_url: "${p.base_url}"`);
       if (p.models?.length) {
         lines.push("    models:");
         for (const m of p.models) lines.push(`      - ${m}`);
       }
-      if (p.enabled !== undefined) lines.push(`    enabled: ${p.enabled}`);
     }
+  } else {
+    lines.push("  {}");
   }
 
+  // Proxy
+  lines.push("");
+  lines.push("proxy:");
+  lines.push(`  port: 4000`);
+  lines.push(`  default_provider: ${config.providers?.[0]?.name || "anthropic"}`);
+  lines.push("  cache:");
+  lines.push(`    enabled: ${config.cache?.enabled ?? false}`);
+  lines.push(`    ttl: ${config.cache?.ttl_seconds ?? 3600}`);
+  lines.push("  rate_limit:");
+  lines.push(`    requests_per_minute: ${config.rate_limit?.requests_per_minute ?? 60}`);
+  if (config.rate_limit?.burst) {
+    lines.push(`    burst: ${config.rate_limit.burst}`);
+  }
+
+  // Policies
   if (config.policies?.length) {
-    lines.push("");
-    lines.push("policies:");
+    lines.push("  policies:");
     for (const p of config.policies) {
-      lines.push(`  - name: ${p.name}`);
-      lines.push(`    phase: ${p.phase}`);
-      lines.push(`    condition: "${p.condition}"`);
-      lines.push(`    action: ${p.action}`);
-      if (p.description) lines.push(`    description: "${p.description}"`);
+      lines.push(`    - name: ${p.name}`);
+      lines.push(`      on: ${p.phase}`);
+      try {
+        const cond = JSON.parse(p.condition);
+        lines.push("      condition:");
+        for (const [k, v] of Object.entries(cond)) {
+          lines.push(`        ${k}: ${v}`);
+        }
+      } catch {
+        lines.push(`      condition: {}`);
+      }
+      lines.push(`      action: ${p.action}`);
+      if (p.description) lines.push(`      message: "${p.description}"`);
     }
+  } else {
+    lines.push("  policies: []");
   }
 
-  if (config.cache) {
-    lines.push("");
-    lines.push("cache:");
-    lines.push(`  enabled: ${config.cache.enabled}`);
-    lines.push(`  ttl_seconds: ${config.cache.ttl_seconds}`);
-  }
+  // Observer
+  lines.push("");
+  lines.push("observer:");
+  lines.push("  port: 4100");
+  lines.push("  storage: sqlite");
+  lines.push("  retention_days: 30");
+  lines.push("  evaluators:");
+  lines.push("    - latency");
+  lines.push("    - cost");
 
-  if (config.rate_limit) {
-    lines.push("");
-    lines.push("rate_limit:");
-    lines.push(`  requests_per_minute: ${config.rate_limit.requests_per_minute}`);
-    lines.push(`  burst: ${config.rate_limit.burst}`);
-  }
+  // Agents
+  lines.push("");
+  lines.push("agents: []");
 
   return lines.join("\n") + "\n";
 }
@@ -681,7 +705,7 @@ export function ProxyConfigView() {
         const data = await api.config();
         const parsed = transformApiConfig(data);
         setConfig(parsed);
-        setYaml(configToYaml(parsed));
+        setYaml(configToRivanoYaml(parsed));
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load config");
@@ -693,9 +717,15 @@ export function ProxyConfigView() {
   }, []);
 
   // Sync visual -> yaml when switching modes
-  function switchMode(next: Mode) {
+  async function switchMode(next: Mode) {
     if (next === "yaml" && mode === "visual") {
-      setYaml(configToYaml(config));
+      // Try to load current raw YAML from server, fall back to generated
+      try {
+        const raw = await fetch("/api/config/raw").then((r) => r.json());
+        setYaml(raw.yaml || configToRivanoYaml(config));
+      } catch {
+        setYaml(configToRivanoYaml(config));
+      }
     }
     setMode(next);
   }
@@ -703,7 +733,7 @@ export function ProxyConfigView() {
   async function handleValidate() {
     setValidating(true);
     try {
-      const currentYaml = mode === "yaml" ? yaml : configToYaml(config);
+      const currentYaml = mode === "yaml" ? yaml : configToRivanoYaml(config);
       const result = await api.validateConfig(currentYaml);
       if (result.valid) {
         showToast("Configuration is valid", "success");
@@ -726,7 +756,7 @@ export function ProxyConfigView() {
   async function handleApply() {
     setSaving(true);
     try {
-      const currentYaml = mode === "yaml" ? yaml : configToYaml(config);
+      const currentYaml = mode === "yaml" ? yaml : configToRivanoYaml(config);
       await api.saveConfig(currentYaml);
       showToast("Config saved — reloading...", "success");
     } catch (err) {
