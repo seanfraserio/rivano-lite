@@ -1,10 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8"/>
-      <stop offset="100%" stop-color="#0284c7"/>
-    </linearGradient>
-  </defs>
-  <rect width="32" height="32" rx="6" fill="url(#g)"/>
-  <text x="16" y="22" text-anchor="middle" font-family="system-ui" font-weight="700" font-size="18" fill="white">R</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Rivano Favicon — Prism mark optimized for 32x32 -->
+  <path d="M16 3 L5 25 L10 25 L16 11 Z" fill="#0EA5E9"/>
+  <path d="M6 27 L26 27 L25 31 L7 31 Z" fill="#06B6D4"/>
+  <path d="M16 3 L27 25 L22 25 L16 11 Z" fill="#22D3EE"/>
 </svg>
