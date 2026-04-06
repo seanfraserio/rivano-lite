@@ -4,10 +4,19 @@ import { MetricCard } from "../shared/MetricCard";
 import { Card } from "../shared/Card";
 import { StatusBadge } from "../shared/StatusBadge";
 
+interface PolicySummary {
+  total: number;
+  allowed: number;
+  blocked: number;
+  redacted: number;
+  warned: number;
+}
+
 interface DashboardData {
   health: HealthStatus | null;
   status: SystemStatus | null;
   stats: TraceStats | null;
+  policy: PolicySummary | null;
   error: string | null;
 }
 
@@ -16,18 +25,28 @@ export function DashboardView() {
     health: null,
     status: null,
     stats: null,
+    policy: null,
     error: null,
   });
 
   useEffect(() => {
     async function load() {
       try {
-        const [health, status, stats] = await Promise.all([
+        const [health, status, stats, policyRes] = await Promise.all([
           api.health(),
           api.status(),
           api.traceStats().catch(() => null),
+          fetch("/api/policy-activity")
+            .then((r) => r.json())
+            .catch(() => null),
         ]);
-        setData({ health, status, stats, error: null });
+        setData({
+          health,
+          status,
+          stats,
+          policy: policyRes?.summary ?? null,
+          error: null,
+        });
       } catch (err) {
         setData((d) => ({
           ...d,
@@ -54,7 +73,8 @@ export function DashboardView() {
     );
   }
 
-  const { health, status, stats } = data;
+  const { health, status, stats, policy } = data;
+  const agentCount = health?.services.agents ?? 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -123,10 +143,8 @@ export function DashboardView() {
         <Card title="Agents">
           <div className="flex items-center justify-between">
             <StatusBadge
-              status={
-                (health?.services.agents || 0) > 0 ? "running" : "stopped"
-              }
-              label={`${health?.services.agents || 0} deployed`}
+              status={agentCount > 0 ? "running" : "stopped"}
+              label={`${agentCount} deployed`}
             />
           </div>
           {status?.agents && status.agents.length > 0 ? (
@@ -139,36 +157,114 @@ export function DashboardView() {
                   </span>
                 </div>
               ))}
+              {status.agents.length > 3 && (
+                <p className="text-[11px] text-text-muted">
+                  +{status.agents.length - 3} more
+                </p>
+              )}
             </div>
           ) : (
             <p className="text-xs text-text-muted mt-3">
-              No agents configured yet
+              No agents configured —{" "}
+              <a href="/agents" className="text-rivano-400 hover:underline">
+                add one
+              </a>
             </p>
           )}
         </Card>
       </div>
 
-      {/* Metrics */}
-      {stats && (
-        <div className="grid grid-cols-4 gap-4">
-          <MetricCard
-            label="Total Traces"
-            value={stats.totalTraces.toLocaleString()}
-          />
-          <MetricCard
-            label="Total Spans"
-            value={stats.totalSpans.toLocaleString()}
-          />
-          <MetricCard
-            label="Avg Latency"
-            value={stats.avgLatencyMs}
-            unit="ms"
-          />
-          <MetricCard
-            label="Total Cost"
-            value={`$${stats.totalCostUsd.toFixed(4)}`}
-          />
-        </div>
+      {/* Metrics — 2 rows */}
+      <div className="grid grid-cols-6 gap-4">
+        <MetricCard
+          label="Total Requests"
+          value={stats?.totalTraces.toLocaleString() ?? "0"}
+        />
+        <MetricCard
+          label="Traces Blocked"
+          value={policy?.blocked ?? 0}
+          className={policy?.blocked ? "border-error/30" : ""}
+        />
+        <MetricCard
+          label="PII Redacted"
+          value={policy?.redacted ?? 0}
+        />
+        <MetricCard
+          label="Avg Latency"
+          value={stats?.avgLatencyMs ?? 0}
+          unit="ms"
+        />
+        <MetricCard
+          label="Total Cost"
+          value={`$${(stats?.totalCostUsd ?? 0).toFixed(4)}`}
+        />
+        <MetricCard
+          label="Agents"
+          value={agentCount}
+        />
+      </div>
+
+      {/* Policy Enforcement Summary */}
+      {policy && policy.total > 0 && (
+        <Card title="Policy Enforcement" subtitle="Request disposition breakdown">
+          <div className="flex items-center gap-6">
+            <div className="flex-1">
+              {/* Stacked bar */}
+              <div className="flex h-3 rounded-full overflow-hidden bg-bg-primary">
+                {policy.allowed > 0 && (
+                  <div
+                    className="bg-success"
+                    style={{ width: `${(policy.allowed / policy.total) * 100}%` }}
+                    title={`${policy.allowed} allowed`}
+                  />
+                )}
+                {policy.blocked > 0 && (
+                  <div
+                    className="bg-error"
+                    style={{ width: `${(policy.blocked / policy.total) * 100}%` }}
+                    title={`${policy.blocked} blocked`}
+                  />
+                )}
+                {policy.redacted > 0 && (
+                  <div
+                    className="bg-info"
+                    style={{ width: `${(policy.redacted / policy.total) * 100}%` }}
+                    title={`${policy.redacted} redacted`}
+                  />
+                )}
+                {policy.warned > 0 && (
+                  <div
+                    className="bg-warning"
+                    style={{ width: `${(policy.warned / policy.total) * 100}%` }}
+                    title={`${policy.warned} warned`}
+                  />
+                )}
+              </div>
+            </div>
+            <div className="flex gap-4 text-xs flex-shrink-0">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-success" />
+                <span className="text-text-secondary">{policy.allowed}</span>
+                <span className="text-text-muted">allowed</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-error" />
+                <span className="text-text-secondary">{policy.blocked}</span>
+                <span className="text-text-muted">blocked</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-info" />
+                <span className="text-text-secondary">{policy.redacted}</span>
+                <span className="text-text-muted">redacted</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-warning" />
+                <span className="text-text-secondary">{policy.warned}</span>
+                <span className="text-text-muted">warned</span>
+              </span>
+            </div>
+          </div>
+        </Card>
       )}
 
       {/* Quick Start */}
