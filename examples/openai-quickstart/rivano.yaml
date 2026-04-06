@@ -1,0 +1,32 @@
+version: "1"
+
+providers:
+  openai:
+    api_key: ${OPENAI_API_KEY}
+
+proxy:
+  port: 4000
+  default_provider: openai
+  cache:
+    enabled: true
+    ttl: 3600
+  rate_limit:
+    requests_per_minute: 60
+  policies: []
+
+observer:
+  port: 4100
+  storage: sqlite
+  retention_days: 30
+  evaluators:
+    - latency
+    - cost
+
+agents:
+  - name: assistant
+    model:
+      provider: openai
+      name: gpt-4o
+      temperature: 0.7
+    system_prompt: |
+      You are a helpful AI assistant.

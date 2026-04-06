@@ -1,0 +1,37 @@
+version: "1"
+
+providers:
+  ollama:
+    base_url: "http://host.docker.internal:11434"
+
+proxy:
+  port: 4000
+  default_provider: ollama
+  cache:
+    enabled: true
+    ttl: 3600
+  rate_limit:
+    requests_per_minute: 120
+  policies:
+    - name: block-injection
+      on: request
+      condition:
+        injection_score:
+          gt: 0.9
+      action: block
+
+observer:
+  port: 4100
+  storage: sqlite
+  retention_days: 30
+  evaluators:
+    - latency
+
+agents:
+  - name: local-assistant
+    model:
+      provider: ollama
+      name: llama3.2
+      temperature: 0.7
+    system_prompt: |
+      You are a helpful AI assistant running locally.

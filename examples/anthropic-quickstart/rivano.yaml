@@ -1,0 +1,45 @@
+version: "1"
+
+providers:
+  anthropic:
+    api_key: ${ANTHROPIC_API_KEY}
+
+proxy:
+  port: 4000
+  default_provider: anthropic
+  cache:
+    enabled: true
+    ttl: 3600
+  rate_limit:
+    requests_per_minute: 60
+  policies:
+    - name: block-injection
+      on: request
+      condition:
+        injection_score:
+          gt: 0.8
+      action: block
+      message: "Potential prompt injection detected"
+    - name: redact-emails
+      on: request
+      condition:
+        pii_detected: true
+      action: redact
+
+observer:
+  port: 4100
+  storage: sqlite
+  retention_days: 30
+  evaluators:
+    - latency
+    - cost
+
+agents:
+  - name: assistant
+    model:
+      provider: anthropic
+      name: claude-sonnet-4-5
+      temperature: 0.7
+      max_tokens: 4096
+    system_prompt: |
+      You are a helpful AI assistant.

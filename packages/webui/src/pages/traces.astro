@@ -1,0 +1,8 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { TracesView } from "../components/traces/TracesView";
+---
+
+<BaseLayout title="Traces — Rivano Lite" active="traces">
+  <TracesView client:load />
+</BaseLayout>

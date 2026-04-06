@@ -1,0 +1,8 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { LogsView } from "../components/logs/LogsView";
+---
+
+<BaseLayout title="Logs — Rivano Lite" active="logs">
+  <LogsView client:load />
+</BaseLayout>

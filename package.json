@@ -1,0 +1,33 @@
+{
+  "name": "rivano-lite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open source, self-hosted AI operations platform — proxy, observe, deploy",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rivano-ai/rivano-lite.git"
+  },
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck",
+    "lint": "turbo lint",
+    "clean": "turbo clean",
+    "docker:build": "docker build -t rivano-lite -f container/Dockerfile .",
+    "docker:run": "docker run -d --name rivano-lite -p 9000:9000 -p 4000:4000 -p 4100:4100 -v ~/.rivano:/data rivano-lite"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.0",
+    "@types/bun": "^1.2.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ]
+}

@@ -1,0 +1,12 @@
+node_modules
+dist
+.turbo
+*.tsbuildinfo
+.git
+.github
+.DS_Store
+*.db
+*.db-wal
+*.db-shm
+audit.jsonl
+docs

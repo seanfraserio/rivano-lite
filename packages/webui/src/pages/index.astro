@@ -1,0 +1,8 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { DashboardView } from "../components/dashboard/DashboardView";
+---
+
+<BaseLayout title="Dashboard — Rivano Lite" active="dashboard">
+  <DashboardView client:load />
+</BaseLayout>

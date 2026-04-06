@@ -1,0 +1,98 @@
+const API_BASE = typeof window !== "undefined" ? "" : "http://localhost:9000";
+
+async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { "Content-Type": "application/json", ...opts?.headers },
+    ...opts,
+  });
+  if (!res.ok) {
+    throw new Error(`API ${path}: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export interface HealthStatus {
+  status: string;
+  version: string;
+  services: {
+    proxy: string;
+    observer: string;
+    agents: number;
+  };
+}
+
+export interface SystemStatus {
+  config: string;
+  dataDir: string;
+  proxy: {
+    port: number;
+    providers: string[];
+    policies: number;
+  };
+  observer: {
+    port: number;
+    storage: string;
+    retentionDays: number;
+  };
+  agents: Array<{
+    name: string;
+    provider: string;
+    model: string;
+    deployedAt: string;
+  }>;
+}
+
+export interface TraceListItem {
+  id: string;
+  source?: string;
+  startTime: number;
+  endTime?: number;
+  totalCostUsd?: number;
+  spans: Array<{
+    id: string;
+    type: string;
+    name: string;
+    startTime: number;
+    endTime?: number;
+    estimatedCostUsd?: number;
+  }>;
+}
+
+export interface TraceStats {
+  totalTraces: number;
+  totalSpans: number;
+  avgLatencyMs: number;
+  totalCostUsd: number;
+  tracesPerDay: Record<string, number>;
+}
+
+export const api = {
+  health: () => apiFetch<HealthStatus>("/health"),
+  status: () => apiFetch<SystemStatus>("/api/status"),
+  config: () => apiFetch<Record<string, unknown>>("/api/config"),
+
+  saveConfig: (yaml: string) =>
+    apiFetch<{ ok: boolean }>("/api/config", {
+      method: "PUT",
+      body: JSON.stringify({ yaml }),
+    }),
+
+  validateConfig: (yaml: string) =>
+    apiFetch<{ valid: boolean; errors?: string[] }>("/api/config/validate", {
+      method: "POST",
+      body: JSON.stringify({ yaml }),
+    }),
+
+  traces: (params?: { limit?: number; offset?: number; source?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set("limit", String(params.limit));
+    if (params?.offset) query.set("offset", String(params.offset));
+    if (params?.source) query.set("source", params.source);
+    return apiFetch<{ traces: TraceListItem[]; total: number }>(
+      `/api/traces?${query}`
+    );
+  },
+
+  trace: (id: string) => apiFetch<TraceListItem>(`/api/traces/${id}`),
+  traceStats: () => apiFetch<TraceStats>("/api/traces/stats"),
+};

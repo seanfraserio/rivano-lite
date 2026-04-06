@@ -1,0 +1,126 @@
+# Rivano Lite
+
+**Open source, self-hosted AI operations platform.**
+
+Rivano Lite gives you the core [Rivano](https://rivano.ai) experience locally — an AI proxy with governance, observability with tracing, and agent deployment — all in a single container.
+
+## Quick Start
+
+```bash
+curl -fsSL https://get.rivano.ai | sh
+rivano start
+```
+
+Then open [http://localhost:9000](http://localhost:9000) to configure your providers and start proxying.
+
+## What You Get
+
+- **AI Proxy Gateway** — Route requests to Anthropic, OpenAI, Ollama, or AWS Bedrock with policy enforcement, PII redaction, prompt injection detection, caching, and rate limiting
+- **Observability** — Full trace capture with span trees, timing waterfalls, cost attribution, and quality evaluators
+- **Agent Deployment** — Define agents as code in YAML, deploy idempotently with diff/validate
+- **Local WebUI** — Browser-based dashboard at `localhost:9000` for configuration and monitoring
+
+## Requirements
+
+- Docker (Docker Desktop on macOS, or Docker Engine on Linux)
+- macOS (Intel or Apple Silicon) or Linux (amd64 or arm64)
+
+## Manual Install
+
+```bash
+# Pull and run directly
+docker run -d --name rivano-lite \
+  -p 9000:9000 -p 4000:4000 -p 4100:4100 \
+  -v ~/.rivano:/data \
+  ghcr.io/rivano-ai/rivano-lite:latest
+
+# Open the WebUI
+open http://localhost:9000
+```
+
+## Configuration
+
+All configuration lives in a single `rivano.yaml` file:
+
+```yaml
+version: "1"
+
+providers:
+  anthropic:
+    api_key: ${ANTHROPIC_API_KEY}
+  ollama:
+    base_url: "http://host.docker.internal:11434"
+
+proxy:
+  port: 4000
+  cache:
+    enabled: true
+  policies:
+    - name: block-injection
+      on: request
+      condition: { injection_score: { gt: 0.8 } }
+      action: block
+
+observer:
+  port: 4100
+  retention_days: 30
+
+agents:
+  - name: my-agent
+    model:
+      provider: anthropic
+      name: claude-sonnet-4-5
+    system_prompt: "You are a helpful assistant."
+```
+
+## CLI Commands
+
+```bash
+rivano start       # Start the container
+rivano stop        # Stop the container
+rivano status      # Show health and stats
+rivano logs        # Stream container logs
+rivano config      # Open WebUI in browser
+rivano update      # Pull latest image and restart
+rivano uninstall   # Remove container, image, and CLI
+```
+
+## Connect Your App
+
+Point your AI SDK at the Rivano proxy:
+
+```typescript
+import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic({
+  baseURL: "http://localhost:4000/v1",
+});
+```
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(base_url="http://localhost:4000/v1")
+```
+
+## Rivano Lite vs Rivano Cloud
+
+| | Lite (OSS) | Cloud |
+|---|---|---|
+| AI Proxy | All providers | All + custom |
+| PII Detection | Regex | ML-based NER |
+| Injection Detection | Heuristic | ML models |
+| Cache | Exact-match | Semantic (ML) |
+| Rate Limiting | In-memory | Distributed |
+| Tracing | Full spans + cost | + PII in traces |
+| Storage | SQLite | Managed Postgres |
+| Auth | — | OAuth, SAML, RBAC |
+| Alerts | — | Slack, PagerDuty |
+| Compliance | — | SOC2, HIPAA |
+| **Price** | **Free** | **Usage-based** |
+
+[Upgrade to Rivano Cloud →](https://rivano.ai)
+
+## License
+
+MIT

@@ -1,0 +1,66 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build packages
+        run: |
+          cd packages/core && bun run build
+          cd ../engine && bun run build
+          cd ../proxy && bun run build
+          cd ../observer && bun run build
+          cd ../server && bun run build
+
+      - name: Run tests
+        run: |
+          cd packages/core && bun test
+          cd ../engine && bun test
+          cd ../proxy && bun test
+          cd ../observer && bun test
+
+      - name: Typecheck
+        run: |
+          cd packages/core && bun run typecheck
+          cd ../engine && bun run typecheck
+          cd ../proxy && bun run typecheck
+          cd ../observer && bun run typecheck
+          cd ../server && bun run typecheck
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t rivano-lite-test -f container/Dockerfile .
+
+      - name: Check image size
+        run: |
+          SIZE=$(docker image inspect rivano-lite-test --format='{{.Size}}')
+          SIZE_MB=$((SIZE / 1024 / 1024))
+          echo "Image size: ${SIZE_MB}MB"
+          if [ "$SIZE_MB" -gt 200 ]; then
+            echo "::error::Image size ${SIZE_MB}MB exceeds 200MB limit"
+            exit 1
+          fi
+          echo "::notice::Image size ${SIZE_MB}MB (limit: 200MB)"

@@ -1,0 +1,8 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { AgentsView } from "../components/agents/AgentsView";
+---
+
+<BaseLayout title="Agents — Rivano Lite" active="agents">
+  <AgentsView client:load />
+</BaseLayout>

@@ -1,0 +1,72 @@
+version: "1"
+
+# ─── AI Providers ───────────────────────────────────────────
+# Configure your LLM provider API keys here or in ~/.rivano/.env
+# Environment variables: use ${VAR_NAME} syntax
+providers:
+  # anthropic:
+  #   api_key: ${ANTHROPIC_API_KEY}
+  #   models:
+  #     - claude-sonnet-4-5
+  #     - claude-haiku-4-5
+
+  # openai:
+  #   api_key: ${OPENAI_API_KEY}
+  #   models:
+  #     - gpt-4o
+  #     - gpt-4o-mini
+
+  ollama:
+    base_url: "http://host.docker.internal:11434"
+
+# ─── Proxy Gateway ──────────────────────────────────────────
+# Routes AI requests through Rivano with policy enforcement
+proxy:
+  port: 4000
+  default_provider: ollama
+  cache:
+    enabled: true
+    ttl: 3600
+  rate_limit:
+    requests_per_minute: 120
+  policies: []
+    # Example policies:
+    # - name: block-injection
+    #   on: request
+    #   condition:
+    #     injection_score:
+    #       gt: 0.8
+    #   action: block
+    #   message: "Potential prompt injection detected"
+    #
+    # - name: redact-pii
+    #   on: request
+    #   condition:
+    #     pii_detected: true
+    #   action: redact
+
+# ─── Observability ──────────────────────────────────────────
+# Trace capture, metrics, and quality evaluation
+observer:
+  port: 4100
+  storage: sqlite
+  retention_days: 30
+  evaluators:
+    - latency
+    - cost
+
+# ─── Agents ─────────────────────────────────────────────────
+# Define agents as code — deploy idempotently
+agents: []
+  # Example agent:
+  # - name: support-triage
+  #   description: "Classifies and routes support tickets"
+  #   model:
+  #     provider: anthropic
+  #     name: claude-sonnet-4-5
+  #     temperature: 0.3
+  #     max_tokens: 2048
+  #   system_prompt: |
+  #     You classify support tickets into categories:
+  #     billing, technical, feature-request, bug-report.
+  #   tools: []
