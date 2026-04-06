@@ -94,6 +94,8 @@ export function createProxyServer(
 
     if (requestResult === "block") {
       stats.blocks++;
+      // Still run response pipeline so audit middleware emits a trace
+      await responsePipeline.execute(ctx);
       const statusCode = (ctx.metadata.statusCode as number) ?? 403;
       return reply.status(statusCode).send({
         error: ctx.metadata.errorMessage ?? "Request blocked",
