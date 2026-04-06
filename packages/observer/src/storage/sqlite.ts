@@ -190,7 +190,7 @@ export function createStorage(dbPath: string): Storage {
 
       const countRow = db
         .prepare(`SELECT COUNT(*) as total FROM traces ${where}`)
-        .get(params) as { total: number };
+        .get(params as Record<string, string | number>) as { total: number };
 
       const rows = db
         .prepare(
@@ -199,7 +199,7 @@ export function createStorage(dbPath: string): Storage {
         .all({ ...params, $limit: opts.limit, $offset: opts.offset }) as Record<string, unknown>[];
 
       const traces = rows.map((row) => {
-        const spanRows = getSpansStmt.all({ $traceId: row.id }) as Record<string, unknown>[];
+        const spanRows = getSpansStmt.all({ $traceId: row.id as string }) as Record<string, unknown>[];
         return rowToTrace(row, spanRows.map(rowToSpan));
       });
 
