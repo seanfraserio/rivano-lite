@@ -50,11 +50,17 @@ export interface TraceListItem {
   totalCostUsd?: number;
   spans: Array<{
     id: string;
+    traceId?: string;
+    parentSpanId?: string;
     type: string;
     name: string;
+    input?: unknown;
+    output?: unknown;
+    error?: string;
     startTime: number;
     endTime?: number;
     estimatedCostUsd?: number;
+    metadata?: Record<string, unknown>;
   }>;
 }
 

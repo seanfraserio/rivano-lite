@@ -8,8 +8,16 @@ interface Span {
   startTime: number;
   endTime?: number;
   estimatedCostUsd?: number;
-  input?: string;
-  output?: string;
+  input?: unknown;
+  output?: unknown;
+  error?: string;
+  metadata?: Record<string, unknown>;
+}
+
+function formatValue(val: unknown): string {
+  if (val === undefined || val === null) return "";
+  if (typeof val === "string") return val;
+  return JSON.stringify(val, null, 2);
 }
 
 interface Props {
@@ -140,7 +148,7 @@ function SpanRow({
             <div className="p-3 border-b border-border-light">
               <p className="text-[10px] uppercase tracking-wider text-text-muted mb-1">Input</p>
               <pre className="text-xs text-text-secondary font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
-                {span.input}
+                {formatValue(span.input)}
               </pre>
             </div>
           )}
@@ -148,7 +156,7 @@ function SpanRow({
             <div className="p-3">
               <p className="text-[10px] uppercase tracking-wider text-text-muted mb-1">Output</p>
               <pre className="text-xs text-text-secondary font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
-                {span.output}
+                {formatValue(span.output)}
               </pre>
             </div>
           )}

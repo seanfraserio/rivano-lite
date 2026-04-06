@@ -128,7 +128,7 @@ export function TraceDetail({ traceId }: Props) {
       {/* Span tree */}
       <div className="flex-1 overflow-y-auto px-2">
         <SpanTree
-          spans={trace.spans as any}
+          spans={trace.spans}
           traceStartTime={trace.startTime}
           traceDuration={duration}
         />
