@@ -32,10 +32,16 @@ jobs:
 
       - name: Run tests
         run: |
-          cd packages/core && bun test
-          cd ../engine && bun test
-          cd ../proxy && bun test
-          cd ../observer && bun test
+          for pkg in core engine proxy observer; do
+            echo "--- Testing packages/$pkg ---"
+            cd packages/$pkg
+            if ls src/**/*.test.ts test/**/*.test.ts >/dev/null 2>&1; then
+              bun test
+            else
+              echo "No test files found, skipping"
+            fi
+            cd ../..
+          done
 
       - name: Typecheck
         run: |
