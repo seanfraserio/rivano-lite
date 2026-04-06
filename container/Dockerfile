@@ -41,9 +41,8 @@ RUN apk add --no-cache curl tini
 
 WORKDIR /rivano
 
-# Copy built server bundle and its dependencies
+# Copy built server bundle (fully self-contained, no node_modules needed)
 COPY --from=builder /build/packages/server/dist ./dist
-COPY --from=builder /build/node_modules ./node_modules
 
 # Copy WebUI build output (Astro static: HTML + client JS)
 COPY --from=builder /build/packages/webui/dist ./webui/dist
