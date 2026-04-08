@@ -4,12 +4,17 @@ import type { Middleware } from "../pipeline.js";
 interface TokenBucket {
   tokens: number;
   lastRefill: number;
+  createdAt: number;
 }
 
 interface RateLimitConfig {
   requests_per_minute: number;
   burst?: number;
 }
+
+const MAX_BUCKETS = 10_000;
+const STALE_MS = 300_000; // 5 minutes — remove buckets not used in this time
+const CLEANUP_INTERVAL_MS = 60_000; // Run cleanup every 60 seconds
 
 export function createRateLimitMiddleware(config: RateLimitConfig): Middleware {
   const buckets = new Map<string, TokenBucket>();
@@ -26,6 +31,18 @@ export function createRateLimitMiddleware(config: RateLimitConfig): Middleware {
     bucket.lastRefill = now;
   }
 
+  // Periodic cleanup of stale buckets
+  const cleanup = setInterval(() => {
+    const now = Date.now();
+    for (const [key, bucket] of buckets) {
+      if (now - bucket.lastRefill > STALE_MS) {
+        buckets.delete(key);
+      }
+    }
+  }, CLEANUP_INTERVAL_MS);
+  // Allow the process to exit even if the interval is running
+  if (cleanup.unref) cleanup.unref();
+
   return {
     name: "rate-limit",
 
@@ -34,8 +51,22 @@ export function createRateLimitMiddleware(config: RateLimitConfig): Middleware {
       const now = Date.now();
 
       let bucket = buckets.get(key);
+
       if (!bucket) {
-        bucket = { tokens: maxTokens, lastRefill: now };
+        // Evict oldest bucket if at capacity
+        if (buckets.size >= MAX_BUCKETS) {
+          let oldestKey: string | null = null;
+          let oldestTime = Infinity;
+          for (const [k, b] of buckets) {
+            if (b.lastRefill < oldestTime) {
+              oldestTime = b.lastRefill;
+              oldestKey = k;
+            }
+          }
+          if (oldestKey) buckets.delete(oldestKey);
+        }
+
+        bucket = { tokens: maxTokens, lastRefill: now, createdAt: now };
         buckets.set(key, bucket);
       }
 

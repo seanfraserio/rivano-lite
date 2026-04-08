@@ -24,8 +24,10 @@ export function createCacheMiddleware(config: CacheConfig): Middleware {
     provider: string,
     model: string,
     messages: unknown[],
+    params?: unknown,
   ): Promise<string> {
-    const raw = JSON.stringify({ provider, model, messages });
+    // Include messages + all request parameters that affect the response
+    const raw = JSON.stringify({ provider, model, messages, params });
     const encoded = new TextEncoder().encode(raw);
     const hash = await crypto.subtle.digest("SHA-256", encoded);
     return Array.from(new Uint8Array(hash))
@@ -56,7 +58,10 @@ export function createCacheMiddleware(config: CacheConfig): Middleware {
         return "continue";
       }
 
-      const key = await computeKey(ctx.provider, ctx.model, ctx.messages);
+      const key = await computeKey(ctx.provider, ctx.model, ctx.messages, {
+        temperature: (ctx.metadata as Record<string, unknown>).temperature,
+        max_tokens: (ctx.metadata as Record<string, unknown>).max_tokens,
+      });
       ctx.metadata.cacheKey = key;
 
       const isResponsePhase = ctx.metadata.providerResponse !== undefined;

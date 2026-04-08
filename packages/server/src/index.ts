@@ -21,6 +21,7 @@ const CONFIG_PATH = process.env.RIVANO_CONFIG || resolve(DATA_DIR, "rivano.yaml"
 const DB_PATH = resolve(DATA_DIR, "traces.db");
 const STATE_PATH = resolve(DATA_DIR, "state.json");
 const WEBUI_PORT = parseInt(process.env.RIVANO_WEBUI_PORT || "9000", 10);
+const API_KEY = process.env.RIVANO_API_KEY;
 
 interface ServerState {
   config: RivanoConfig;
@@ -164,6 +165,34 @@ async function startWebUI() {
 
   const app = Fastify({ logger: false });
 
+  // ── API authentication middleware ────────────────────────────
+  if (!API_KEY) {
+    console.warn("[rivano] WARNING: No RIVANO_API_KEY set — API endpoints are unauthenticated!");
+    console.warn("[rivano] Set RIVANO_API_KEY environment variable to secure the API.");
+  }
+
+  app.addHook("onRequest", async (request, reply) => {
+    if (!request.url.startsWith("/api")) return;
+    if (!API_KEY) return; // Skip auth when no key configured
+
+    const auth = request.headers["authorization"];
+    if (auth === `Bearer ${API_KEY}`) return;
+
+    return reply.status(401).send({ error: "Unauthorized: provide a valid API key via Authorization: Bearer <key>" });
+  });
+
+  // ── Prototype pollution sanitization for YAML ───────────────
+  function sanitizeYamlObj(obj: unknown): unknown {
+    if (typeof obj !== "object" || obj === null) return obj;
+    if (Array.isArray(obj)) return obj.map(sanitizeYamlObj);
+    const clean: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
+      clean[key] = sanitizeYamlObj(value);
+    }
+    return clean;
+  }
+
   // ── Static files (Astro static build output) ────────────────
   // Astro static mode outputs to dist/ (no client/server split)
   const possiblePaths = [
@@ -243,13 +272,17 @@ async function startWebUI() {
     for (const [, provider] of Object.entries(masked.providers || {})) {
       const p = provider as Record<string, unknown>;
       if (p.api_key && typeof p.api_key === "string") {
-        p.api_key = p.api_key.length > 8 ? "****" + p.api_key.slice(-4) : "****";
+        const key = p.api_key as string;
+        p.api_key = key.length > 8 ? key.slice(0, 4) + "****" : "****";
       }
     }
     return masked;
   });
 
-  app.get("/api/config/raw", async () => {
+  app.get("/api/config/raw", async (request, reply) => {
+    if (!API_KEY) {
+      return reply.status(403).send({ error: "Set RIVANO_API_KEY to access raw config" });
+    }
     const raw = await readFile(CONFIG_PATH, "utf-8");
     return { yaml: raw };
   });
@@ -267,7 +300,7 @@ async function startWebUI() {
       }
 
       // Validate before writing — use safe YAML schema
-      const parsed = YAML.load(yaml, { schema: YAML.JSON_SCHEMA });
+      const parsed = sanitizeYamlObj(YAML.load(yaml, { schema: YAML.JSON_SCHEMA }));
       validateConfig(parsed);
 
       // Write atomically (tmp + rename)
@@ -300,7 +333,7 @@ async function startWebUI() {
       if (!yaml || typeof yaml !== "string") {
         return reply.status(400).send({ valid: false, errors: ["Missing yaml field"] });
       }
-      const parsed = YAML.load(yaml, { schema: YAML.JSON_SCHEMA });
+      const parsed = sanitizeYamlObj(YAML.load(yaml, { schema: YAML.JSON_SCHEMA }));
       validateConfig(parsed);
       return { valid: true };
     } catch (err) {
@@ -561,11 +594,21 @@ async function shutdown(signal: string) {
   state.shuttingDown = true;
   console.log(`\n[rivano] Received ${signal} — shutting down gracefully...`);
 
+  // Stop accepting new connections — Fastify.close() drains in-flight requests
   const shutdowns: Promise<void>[] = [];
   if (state.proxy) shutdowns.push(state.proxy.close());
   if (state.observer) shutdowns.push(state.observer.close());
 
-  await Promise.allSettled(shutdowns);
+  // Allow up to 10 seconds for in-flight requests to finish
+  const drainTimeout = new Promise<void>((_, reject) =>
+    setTimeout(() => reject(new Error("Drain timeout")), 10_000)
+  );
+
+  try {
+    await Promise.race([Promise.allSettled(shutdowns), drainTimeout]);
+  } catch {
+    console.log("[rivano] Drain timeout — forcing shutdown");
+  }
 
   // Close shared storage (not owned by observer)
   if (state.storage) {

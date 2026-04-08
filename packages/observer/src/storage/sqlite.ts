@@ -93,6 +93,7 @@ export function createStorage(dbPath: string): Storage {
   const db = new Database(dbPath);
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
+  db.exec("PRAGMA busy_timeout = 5000");
   db.exec(SCHEMA);
 
   const insertTraceStmt = db.prepare(`
@@ -198,9 +199,31 @@ export function createStorage(dbPath: string): Storage {
         )
         .all({ ...params, $limit: opts.limit, $offset: opts.offset }) as Record<string, unknown>[];
 
+      // Batch-load spans for all traces in a single query (fixes N+1)
+      const traceIds = rows.map((r) => r.id as string);
+      const allSpans = traceIds.length > 0
+        ? (db
+            .prepare(
+              `SELECT * FROM spans WHERE trace_id IN (${traceIds.map((_, i) => `$id${i}`).join(",")}) ORDER BY start_time ASC`
+            )
+            .all(
+              Object.fromEntries(traceIds.map((id, i) => [`$id${i}`, id]))
+            ) as Record<string, unknown>[])
+        : [];
+
+      // Group spans by trace_id
+      const spansByTrace = new Map<string, Span[]>();
+      for (const spanRow of allSpans) {
+        const traceId = spanRow.trace_id as string;
+        const span = rowToSpan(spanRow);
+        const arr = spansByTrace.get(traceId);
+        if (arr) arr.push(span);
+        else spansByTrace.set(traceId, [span]);
+      }
+
       const traces = rows.map((row) => {
-        const spanRows = getSpansStmt.all({ $traceId: row.id as string }) as Record<string, unknown>[];
-        return rowToTrace(row, spanRows.map(rowToSpan));
+        const spans = spansByTrace.get(row.id as string) ?? [];
+        return rowToTrace(row, spans);
       });
 
       return { traces, total: countRow.total };

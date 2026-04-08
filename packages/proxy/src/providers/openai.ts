@@ -2,53 +2,63 @@ import type { ProviderConfig } from "@rivano/core";
 import type { ProviderResponse } from "./types.js";
 import { filterHeaders, extractHeaders, validateBaseUrl, resolveAndValidateUrl } from "./utils.js";
 
+const PROVIDER_TIMEOUT_MS = 30_000; // 30 second default timeout
+
 export function createOpenAIProvider(config: ProviderConfig) {
   const baseUrl = config.base_url ?? "https://api.openai.com";
   validateBaseUrl(baseUrl);
 
-  let dnsValidated = false;
   return async (
     path: string,
     body: unknown,
     headers: Record<string, string>,
+    signal?: AbortSignal,
   ): Promise<ProviderResponse> => {
-    if (!dnsValidated) {
-      await resolveAndValidateUrl(baseUrl);
-      dnsValidated = true;
-    }
+    await resolveAndValidateUrl(baseUrl);
 
     const requestBody = body as { stream?: boolean };
     const isStreaming = requestBody?.stream === true;
 
-    const response = await fetch(`${baseUrl}${path}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${config.api_key ?? ""}`,
-        ...filterHeaders(headers),
-      },
-      body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+    if (signal) {
+      signal.addEventListener("abort", () => controller.abort());
+    }
 
-    if (isStreaming && response.body) {
+    try {
+      const response = await fetch(`${baseUrl}${path}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${config.api_key ?? ""}`,
+          ...filterHeaders(headers),
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (isStreaming && response.body) {
+        return {
+          status: response.status,
+          headers: extractHeaders(response),
+          body: null,
+          stream: response.body,
+        };
+      }
+
+      const responseBody = (await response.json()) as {
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
+
       return {
         status: response.status,
         headers: extractHeaders(response),
-        body: null,
-        stream: response.body,
+        body: responseBody,
+        tokensIn: responseBody.usage?.prompt_tokens,
+        tokensOut: responseBody.usage?.completion_tokens,
       };
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const responseBody = (await response.json()) as {
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
-    };
-
-    return {
-      status: response.status,
-      headers: extractHeaders(response),
-      body: responseBody,
-      tokensIn: responseBody.usage?.prompt_tokens,
-      tokensOut: responseBody.usage?.completion_tokens,
-    };
   };
 }

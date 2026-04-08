@@ -78,12 +78,23 @@ export const RivanoConfigSchema = z.object({
 });
 
 export function interpolateEnvVars(text: string): string {
-  return text.replace(/\$\{([^}]+)\}/g, (match, varName) => {
-    const value = process.env[varName.trim()];
-    // Return empty string for missing vars — they may be in comments
-    // or optional provider keys not yet configured
-    return value ?? "";
+  const missing: string[] = [];
+  const result = text.replace(/\$\{([^}]+)\}/g, (match, varName) => {
+    const trimmed = varName.trim();
+    const value = process.env[trimmed];
+    if (value === undefined) {
+      missing.push(trimmed);
+      return "";
+    }
+    return value;
   });
+
+  if (missing.length > 0) {
+    console.warn(`[rivano] Warning: Unset environment variables: ${missing.join(", ")}. ` +
+      "Providers with empty API keys will fail. Set these in your .env file or environment.");
+  }
+
+  return result;
 }
 
 export function validateConfig(config: unknown): RivanoConfig {
