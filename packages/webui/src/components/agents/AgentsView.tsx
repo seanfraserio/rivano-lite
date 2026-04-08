@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { api, type SystemStatus } from "../../lib/api";
 import { Card } from "../shared/Card";
 
+const AUTH_ERROR = "Set your API key in Settings → API Authentication to manage agents.";
+
+function isAuthError(err: unknown): boolean {
+  return err instanceof Error && (err.message.includes("401") || err.message.includes("403"));
+}
+
 interface AgentConfig {
   name: string;
   description: string;
@@ -175,7 +181,7 @@ export function AgentsView() {
       setConfig(configRes);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load agents");
+      setError(isAuthError(err) ? AUTH_ERROR : (err instanceof Error ? err.message : "Failed to load agents"));
     }
   }
 
@@ -274,7 +280,7 @@ export function AgentsView() {
       await api.saveConfig(mergedYaml);
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove agent");
+      setError(isAuthError(err) ? AUTH_ERROR : (err instanceof Error ? err.message : "Failed to remove agent"));
     } finally {
       setSaving(false);
     }
