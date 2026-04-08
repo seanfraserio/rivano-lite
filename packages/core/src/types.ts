@@ -74,6 +74,31 @@ export type SpanType =
   | "retrieval"
   | "custom";
 
+export interface PipelineMetadata {
+  ip?: string;
+  path?: string;
+  model?: string;
+  statusCode?: number;
+  errorMessage?: string;
+  blockedBy?: string;
+  blockReason?: string;
+  injectionScore?: number;
+  injectionThreshold?: number;
+  cacheHit?: boolean;
+  cacheKey?: string;
+  cacheStats?: { hits: number; misses: number; size: number };
+  rateLimitExceeded?: boolean;
+  apiKey?: string;
+  providerResponse?: unknown;
+  tokensIn?: number;
+  tokensOut?: number;
+  redacted?: boolean;
+  tags?: string[];
+  usage?: { input_tokens: number; output_tokens: number };
+  action?: string;
+  [key: string]: unknown;
+}
+
 export interface Span {
   id: string;
   traceId: string;
@@ -86,7 +111,7 @@ export interface Span {
   startTime: number;
   endTime?: number;
   estimatedCostUsd?: number;
-  metadata?: Record<string, unknown>;
+  metadata?: PipelineMetadata;
 }
 
 export interface Trace {
@@ -96,7 +121,7 @@ export interface Trace {
   endTime?: number;
   totalCostUsd?: number;
   source?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: PipelineMetadata;
 }
 
 export type PipelineResult = "continue" | "block" | "short-circuit";
@@ -107,13 +132,9 @@ export interface PipelineContext {
   model: string;
   agentName?: string;
   messages: unknown[];
-  decisions: Array<{
-    middleware: string;
-    result: PipelineResult;
-    reason?: string;
-  }>;
+  decisions: Array<{ middleware: string; result: PipelineResult; reason?: string }>;
   startTime: number;
-  metadata: Record<string, unknown>;
+  metadata: PipelineMetadata;
 }
 
 export interface AuditEntry {

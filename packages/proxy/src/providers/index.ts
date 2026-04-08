@@ -6,6 +6,8 @@ import { createOllamaProvider } from "./ollama.js";
 
 export type { ProviderResponse, ProviderFn };
 
+// Note: Google/Gemini provider is listed in the WebUI but not yet implemented.
+// Users should configure a custom OpenAI-compatible endpoint instead.
 const PROVIDER_PATH_MAP: Record<string, string> = {
   "/v1/messages": "anthropic",
   "/v1/chat/completions": "openai",
@@ -29,6 +31,11 @@ export function createProvider(name: string, config: ProviderConfig): ProviderFn
       return createOpenAIProvider(config);
     case "ollama":
       return createOllamaProvider(config);
+    case "bedrock":
+      throw new Error(
+        "AWS Bedrock provider is not yet implemented in Rivano Lite. " +
+        "Configure an OpenAI-compatible endpoint or use Rivano Cloud for Bedrock support."
+      );
     default:
       throw new Error(`Unknown provider: ${name}`);
   }

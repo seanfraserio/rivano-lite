@@ -4,15 +4,21 @@ import { createStorage, type Storage } from "./storage/sqlite.js";
 import { evaluateLatency } from "./evaluators/latency.js";
 import { evaluateCost } from "./evaluators/cost.js";
 
+export interface ObserverServerOptions {
+  storage?: Storage;
+}
+
 export function createObserverServer(
   config: ObserverConfig,
-  dbPath: string
+  dbPath: string,
+  options?: ObserverServerOptions
 ): FastifyInstance {
   const server = Fastify({ logger: true });
-  const storage = createStorage(dbPath);
+  const ownsStorage = !options?.storage;
+  const storage = options?.storage ?? createStorage(dbPath);
 
   server.addHook("onClose", () => {
-    storage.close();
+    if (ownsStorage) storage.close();
   });
 
   server.get("/health", async () => {

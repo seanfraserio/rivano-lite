@@ -1,6 +1,10 @@
 import type { Policy, PolicyAction, PolicyCondition } from "./types.js";
 import safe from "safe-regex2";
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 interface PolicyEvalContext {
   text: string;
   injectionScore: number;
@@ -12,7 +16,10 @@ export function evaluateCondition(
   context: PolicyEvalContext,
 ): boolean {
   if (condition.contains !== undefined) {
-    if (!context.text.includes(condition.contains)) return false;
+    // Use word-boundary-aware matching to avoid false positives
+    // (e.g., "SSN" should not match inside "assignment")
+    const pattern = new RegExp(`\\b${escapeRegex(condition.contains)}\\b`, "i");
+    if (!pattern.test(context.text.slice(0, 10_000))) return false;
   }
 
   if (condition.regex !== undefined) {

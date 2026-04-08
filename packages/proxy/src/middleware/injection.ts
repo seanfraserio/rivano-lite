@@ -17,7 +17,7 @@ export function createInjectionMiddleware(threshold?: number): Middleware {
         .join("\n");
 
       const result = scoreInjection(content);
-      const score = typeof result === "number" ? result : (result as { score: number }).score;
+      const score = result.score;
       ctx.metadata.injectionScore = score;
       ctx.metadata.injectionThreshold = limit;
 

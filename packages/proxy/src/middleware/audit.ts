@@ -1,21 +1,7 @@
 import type { PipelineContext, PipelineResult, AuditEntry, Trace, Span } from "@rivano/core";
+import { estimateCost } from "@rivano/core";
 import type { Middleware } from "../pipeline.js";
 import { appendFileSync } from "node:fs";
-
-const MODEL_PRICING: Record<string, { inPer1M: number; outPer1M: number }> = {
-  "claude-opus-4-6": { inPer1M: 15, outPer1M: 75 },
-  "claude-sonnet-4-5": { inPer1M: 3, outPer1M: 15 },
-  "claude-haiku-4-5": { inPer1M: 0.8, outPer1M: 4 },
-  "gpt-4o": { inPer1M: 2.5, outPer1M: 10 },
-  "gpt-4o-mini": { inPer1M: 0.15, outPer1M: 0.6 },
-  "o3-mini": { inPer1M: 1.1, outPer1M: 4.4 },
-};
-const DEFAULT_PRICING = { inPer1M: 1, outPer1M: 3 };
-
-function estimateCost(model: string, tokensIn: number, tokensOut: number): number {
-  const p = MODEL_PRICING[model] ?? DEFAULT_PRICING;
-  return Math.round(((tokensIn / 1_000_000) * p.inPer1M + (tokensOut / 1_000_000) * p.outPer1M) * 1_000_000) / 1_000_000;
-}
 
 interface AuditConfig {
   output?: "stdout" | "file";
@@ -117,8 +103,9 @@ export function createAuditMiddleware(config?: AuditConfig): Middleware {
 
         try {
           config.onTrace(trace);
-        } catch {
-          // Don't let trace emission failure affect the request
+        } catch (err) {
+          // Don't let trace emission failure affect the request, but log it
+          console.error("[rivano] Trace emission failed:", err);
         }
       }
 

@@ -29,6 +29,74 @@ const EMPTY_AGENT: AgentConfig = {
 
 const PROVIDERS = ["anthropic", "openai", "ollama", "bedrock"] as const;
 
+/**
+ * Safely serialize a string as a YAML scalar value.
+ * Uses double-quoted style with proper escaping for special characters.
+ */
+function yamlScalar(value: string): string {
+  const escaped = value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t");
+  return `"${escaped}"`;
+}
+
+/**
+ * Merge agent changes back into raw YAML, replacing the agents section
+ * while preserving everything else (providers, proxy config, API keys).
+ */
+function mergeAgentsIntoYaml(rawYaml: string, agents: AgentConfig[]): string {
+  const lines = rawYaml.split("\n");
+  const result: string[] = [];
+  let inAgents = false;
+
+  for (const line of lines) {
+    if (/^agents\s*:\s*$/.test(line)) {
+      inAgents = true;
+      continue; // skip old agents section header
+    }
+    if (inAgents) {
+      // Agents entries are indented with "  - " or spaces
+      // Stop skipping when we hit a non-indented, non-empty line
+      if (/^\S/.test(line) && line.trim().length > 0) {
+        inAgents = false;
+        result.push(line);
+      }
+      // Skip all lines within the old agents section
+      continue;
+    }
+    result.push(line);
+  }
+
+  // Remove trailing blank lines
+  while (result.length > 0 && result[result.length - 1].trim() === "") {
+    result.pop();
+  }
+
+  // Append new agents section
+  result.push("");
+  if (agents.length === 0) {
+    result.push("agents: []");
+  } else {
+    result.push("agents:");
+    for (const a of agents) {
+      result.push(`  - name: ${yamlScalar(a.name)}`);
+      if (a.description) result.push(`    description: ${yamlScalar(a.description)}`);
+      result.push(`    model:`);
+      result.push(`      provider: ${a.provider}`);
+      result.push(`      name: ${yamlScalar(a.model)}`);
+      result.push(`      temperature: ${a.temperature}`);
+      result.push(`      max_tokens: ${a.max_tokens}`);
+      result.push(`    system_prompt: ${yamlScalar(a.system_prompt)}`);
+    }
+  }
+  result.push("");
+
+  return result.join("\n");
+}
+
 export function AgentsView() {
   const [agents, setAgents] = useState<AgentStatus[]>([]);
   const [config, setConfig] = useState<Record<string, unknown> | null>(null);
@@ -128,6 +196,8 @@ export function AgentsView() {
     setError(null);
 
     try {
+      // Fetch raw YAML to preserve existing config structure and API keys
+      const { yaml: rawYaml } = await api.configRaw();
       const currentConfig = config || {};
       const configAgents: AgentConfig[] = Array.isArray(
         (currentConfig as { agents?: AgentConfig[] }).agents
@@ -147,8 +217,8 @@ export function AgentsView() {
         configAgents.push({ ...form });
       }
 
-      const updatedConfig = { ...currentConfig, agents: configAgents };
-      await api.saveConfig(JSON.stringify(updatedConfig));
+      const mergedYaml = mergeAgentsIntoYaml(rawYaml, configAgents);
+      await api.saveConfig(mergedYaml);
       setShowForm(false);
       setEditIndex(null);
       await loadData();
@@ -163,6 +233,7 @@ export function AgentsView() {
     setSaving(true);
     setError(null);
     try {
+      const { yaml: rawYaml } = await api.configRaw();
       const currentConfig = config || {};
       const configAgents: AgentConfig[] = Array.isArray(
         (currentConfig as { agents?: AgentConfig[] }).agents
@@ -172,8 +243,8 @@ export function AgentsView() {
 
       const targetName = agents[index].name;
       const filtered = configAgents.filter((a) => a.name !== targetName);
-      const updatedConfig = { ...currentConfig, agents: filtered };
-      await api.saveConfig(JSON.stringify(updatedConfig));
+      const mergedYaml = mergeAgentsIntoYaml(rawYaml, filtered);
+      await api.saveConfig(mergedYaml);
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove agent");

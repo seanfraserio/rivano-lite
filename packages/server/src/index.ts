@@ -7,9 +7,11 @@ import { readFile, writeFile, stat } from "fs/promises";
 import { resolve, join } from "path";
 import YAML from "js-yaml";
 
+const VERSION = "0.1.0";
+
 const BANNER = `
   ┌─────────────────────────────────────┐
-  │         Rivano Lite v0.1.0          │
+  │         Rivano Lite v${VERSION}          │
   │   Open Source AI Operations Platform │
   └─────────────────────────────────────┘
 `;
@@ -36,6 +38,8 @@ interface LogEntry {
   level: "info" | "warn" | "error";
   message: string;
 }
+
+let reloadInProgress = false;
 
 const MAX_LOG_BUFFER = 500;
 
@@ -116,7 +120,7 @@ async function startObserver(config: RivanoConfig) {
   if (!state.storage) {
     state.storage = createStorage(DB_PATH);
   }
-  state.observer = await createObserverServer(config.observer, DB_PATH);
+  state.observer = await createObserverServer(config.observer, DB_PATH, { storage: state.storage });
   await state.observer.listen({ port: config.observer.port, host: "0.0.0.0" });
   bufferLog("info", `Observer listening on :${config.observer.port}`);
   console.log(`[rivano] Observer listening on :${config.observer.port}`);
@@ -200,7 +204,7 @@ async function startWebUI() {
   // ── Health ─────────────────────────────────────────────────
   app.get("/health", async () => ({
     status: "ok",
-    version: "0.1.0",
+    version: VERSION,
     uptime: Math.floor((Date.now() - state.startedAt) / 1000),
     services: {
       proxy: state.proxy ? "running" : "stopped",
@@ -213,7 +217,7 @@ async function startWebUI() {
   app.get("/api/status", async () => ({
     config: CONFIG_PATH,
     dataDir: DATA_DIR,
-    version: "0.1.0",
+    version: VERSION,
     uptime: Math.floor((Date.now() - state.startedAt) / 1000),
     proxy: {
       port: state.config.proxy.port,
@@ -525,6 +529,11 @@ function watchConfig() {
   watch(CONFIG_PATH, () => {
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(async () => {
+      if (reloadInProgress) {
+        bufferLog("info", "Reload already in progress — skipping");
+        return;
+      }
+      reloadInProgress = true;
       bufferLog("info", "Config file changed — reloading...");
       console.log("[rivano] Config file changed — reloading...");
       try {
@@ -538,6 +547,8 @@ function watchConfig() {
       } catch (err) {
         bufferLog("error", `Reload failed: ${err}`);
         console.error("[rivano] Reload failed:", err);
+      } finally {
+        reloadInProgress = false;
       }
     }, 500);
   });
@@ -555,6 +566,12 @@ async function shutdown(signal: string) {
   if (state.observer) shutdowns.push(state.observer.close());
 
   await Promise.allSettled(shutdowns);
+
+  // Close shared storage (not owned by observer)
+  if (state.storage) {
+    state.storage.close();
+  }
+
   console.log("[rivano] Shutdown complete");
   process.exit(0);
 }

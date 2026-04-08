@@ -7,6 +7,7 @@ interface Props {
 }
 
 const { title = "Rivano Lite", active = "" } = Astro.props;
+const VERSION = "0.1.0";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: "grid" },
@@ -98,7 +99,7 @@ const nav = [
             <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
           </svg>
         </a>
-        <p class="text-[10px] text-text-muted/50 mt-1">v0.1.0</p>
+        <p class="text-[10px] text-text-muted/50 mt-1">v{VERSION}</p>
       </div>
     </aside>
 

@@ -24,7 +24,7 @@ export function createProxyServer(
   providers: Record<string, ProviderConfig>,
   options?: ProxyOptions,
 ): FastifyInstance {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 }); // 10MB max request body
   const stats: ProxyStats = { requests: 0, cacheHits: 0, blocks: 0, startedAt: Date.now() };
 
   const providerFns = new Map<string, ProviderFn>();
@@ -64,10 +64,10 @@ export function createProxyServer(
 
     const path = request.url;
     const providerName =
-      (request.headers["x-rivano-provider"] as string) ?? detectProvider(path);
+      (request.headers["x-rivano-provider"] as string) ?? detectProvider(path) ?? config.default_provider;
 
     if (!providerName) {
-      return reply.status(400).send({ error: "Unable to detect provider from path" });
+      return reply.status(400).send({ error: "Unable to detect provider from path and no default_provider configured" });
     }
 
     const providerFn = providerFns.get(providerName);
@@ -105,7 +105,6 @@ export function createProxyServer(
 
     if (requestResult === "short-circuit" && ctx.metadata.cacheHit) {
       stats.cacheHits++;
-      ctx.metadata.providerResponse = ctx.metadata.providerResponse;
       await responsePipeline.execute(ctx);
       return reply.send(ctx.metadata.providerResponse);
     }
