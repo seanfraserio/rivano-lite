@@ -40,8 +40,14 @@ export function registerConfigRoutes(app: FastifyInstance, state: ServerState, r
     if (!API_KEY) {
       return reply.status(403).send({ error: "Set RIVANO_API_KEY to access raw config" });
     }
-    const raw = await readFile(CONFIG_PATH, "utf-8");
-    return { yaml: raw };
+    try {
+      const raw = await readFile(CONFIG_PATH, "utf-8");
+      return { yaml: raw };
+    } catch (err) {
+      // Config file doesn't exist yet — return the in-memory default as YAML
+      const defaultYaml = YAML.dump(state.config, { lineWidth: -1, noRefs: true });
+      return { yaml: defaultYaml };
+    }
   });
 
   // ── Config write ───────────────────────────────────────────
@@ -72,7 +78,7 @@ export function registerConfigRoutes(app: FastifyInstance, state: ServerState, r
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       state.bufferLog("error", `Config update failed: ${message}`);
-      return reply.status(400).send({ ok: false, error: "Configuration validation failed" });
+      return reply.status(400).send({ ok: false, error: `Configuration validation failed: ${message}` });
     }
   });
 

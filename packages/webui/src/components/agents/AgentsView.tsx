@@ -233,7 +233,9 @@ export function AgentsView() {
       setEditIndex(null);
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save agent");
+      const msg = err instanceof Error ? err.message : "Failed to save agent";
+      // Try to extract the server error details if available
+      setError(msg);
     } finally {
       setSaving(false);
     }
