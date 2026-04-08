@@ -36,12 +36,14 @@ export function registerSystemRoutes(app: FastifyInstance, state: ServerState) {
       storage: state.config.observer.storage,
       retentionDays: state.config.observer.retention_days,
     },
-    agents: Array.from(state.agents.values()).map((a) => ({
-      name: a.config.name,
-      provider: a.config.model.provider,
-      model: a.config.model.name,
-      deployedAt: a.deployedAt,
-    })),
+    agents: Array.from(state.agents.values())
+      .filter((a) => a.config)
+      .map((a) => ({
+        name: a.config.name,
+        provider: a.config.model.provider,
+        model: a.config.model.name,
+        deployedAt: a.deployedAt,
+      })),
   }));
 
   // ── Logs ───────────────────────────────────────────────────

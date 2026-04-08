@@ -98,10 +98,19 @@ async function startObserver(config: RivanoConfig) {
 
 async function deployAgents(config: RivanoConfig) {
   if (config.agents.length === 0) {
+    // Clear any previously deployed agents
+    state.agents.clear();
     state.bufferLog("info", "No agents defined — skipping deployment");
     console.log("[rivano] No agents defined — skipping deployment");
     return;
   }
+  // Remove agents no longer in config
+  for (const name of state.agents.keys()) {
+    if (!config.agents.find((a) => a.name === name)) {
+      state.agents.delete(name);
+    }
+  }
+
   const results = await deploy(config.agents, STATE_PATH);
   for (const result of results) {
     if (result.success) {
