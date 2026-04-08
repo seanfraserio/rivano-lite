@@ -2,6 +2,14 @@ import { useEffect, useState } from "react";
 import { api, type HealthStatus } from "../../lib/api";
 import { Card } from "../shared/Card";
 
+/** Build auth headers from localStorage for raw fetch calls */
+function authHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const apiKey = localStorage.getItem("rivano_api_key");
+  if (!apiKey) return {};
+  return { Authorization: `Bearer ${apiKey}` };
+}
+
 interface EnvKey {
   key: string;
   masked: string;
@@ -31,6 +39,16 @@ export function SettingsView() {
     type: "ok" | "error";
     text: string;
   } | null>(null);
+  const [apiKeyInput, setApiKeyInput] = useState(
+    typeof window !== "undefined" ? (localStorage.getItem("rivano_api_key") ?? "") : ""
+  );
+
+  function saveApiKey() {
+    if (!apiKeyInput.trim()) return;
+    api.setApiKey(apiKeyInput.trim());
+    setMessage({ type: "ok", text: "API key saved." });
+    setTimeout(() => setMessage(null), 2000);
+  }
 
   useEffect(() => {
     loadData();
@@ -41,10 +59,10 @@ export function SettingsView() {
       const [h, status, env, stor] = await Promise.all([
         api.health().catch(() => null),
         api.status().catch(() => null),
-        fetch("/api/env")
+        fetch("/api/env", { headers: authHeaders() })
           .then((r) => r.json())
           .catch(() => ({ keys: [] })),
-        fetch("/api/storage")
+        fetch("/api/storage", { headers: authHeaders() })
           .then((r) => r.json())
           .catch(() => null),
       ]);
@@ -76,7 +94,7 @@ export function SettingsView() {
     try {
       const res = await fetch("/api/env", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ key: newKey.trim(), value: newValue }),
       });
       const data = await res.json();
@@ -84,7 +102,7 @@ export function SettingsView() {
         setMessage({ type: "ok", text: `${newKey} saved successfully.` });
         setNewKey("");
         setNewValue("");
-        const env = await fetch("/api/env").then((r) => r.json());
+        const env = await fetch("/api/env", { headers: authHeaders() }).then((r) => r.json());
         setEnvKeys(env.keys || []);
       } else {
         setMessage({ type: "error", text: data.error || "Failed to save" });
@@ -100,13 +118,13 @@ export function SettingsView() {
     try {
       const res = await fetch("/api/env", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ key }),
       });
       const data = await res.json();
       if (data.ok) {
         setMessage({ type: "ok", text: `${key} removed.` });
-        const env = await fetch("/api/env").then((r) => r.json());
+        const env = await fetch("/api/env", { headers: authHeaders() }).then((r) => r.json());
         setEnvKeys(env.keys || []);
       }
     } catch {
@@ -118,10 +136,10 @@ export function SettingsView() {
   async function purgeTraces() {
     if (!confirm("Delete traces older than the retention period?")) return;
     try {
-      const res = await fetch("/api/traces", { method: "DELETE" });
+      const res = await fetch("/api/traces", { method: "DELETE", headers: authHeaders() });
       const data = await res.json();
       setMessage({ type: "ok", text: `Purged ${data.deleted} old traces.` });
-      const stor = await fetch("/api/storage")
+      const stor = await fetch("/api/storage", { headers: authHeaders() })
         .then((r) => r.json())
         .catch(() => null);
       setStorage(stor);
@@ -162,6 +180,41 @@ export function SettingsView() {
           {message.text}
         </div>
       )}
+
+      {/* API Authentication */}
+      <Card title="API Authentication" subtitle="Required for config changes when RIVANO_API_KEY is set">
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <input
+              type="password"
+              placeholder="Enter your API key"
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && saveApiKey()}
+              className="flex-1 bg-bg-primary border border-border rounded-md px-3 py-2 text-sm font-mono text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-rivano-500"
+            />
+            <button
+              onClick={saveApiKey}
+              className="px-4 py-2 bg-rivano-500 hover:bg-rivano-600 text-white text-sm rounded-md transition-colors"
+            >
+              {api.hasApiKey() ? "Update" : "Connect"}
+            </button>
+            {api.hasApiKey() && (
+              <button
+                onClick={() => { api.clearApiKey(); setApiKeyInput(""); }}
+                className="px-3 py-2 bg-bg-hover border border-border text-error/80 hover:text-error text-xs rounded-md transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-text-muted">
+            {api.hasApiKey()
+              ? "✓ API key stored in browser. All requests will include authentication."
+              : "No API key set. If RIVANO_API_KEY is configured on the server, you need to provide it here to make changes."}
+          </p>
+        </div>
+      </Card>
 
       {/* System Info */}
       <Card title="System Info">

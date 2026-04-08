@@ -53,14 +53,24 @@ function mergeAgentsIntoYaml(rawYaml: string, agents: AgentConfig[]): string {
   let inAgents = false;
 
   for (const line of lines) {
-    if (/^agents\s*:\s*$/.test(line)) {
+    // Match "agents:" as a top-level key (possibly with inline value like "agents: []")
+    const agentsHeaderMatch = line.match(/^agents\s*:\s*(.*)/);
+    if (agentsHeaderMatch && !inAgents) {
+      const inlineValue = agentsHeaderMatch[1].trim();
+      // If "agents: []" or "agents:" with no inline content, start skipping
+      if (inlineValue === "" || inlineValue === "[]") {
+        inAgents = true;
+        continue; // skip the agents: header line
+      }
+      // If "agents:" has an unexpected inline value, still skip this line
+      // because we'll replace the whole section
       inAgents = true;
-      continue; // skip old agents section header
+      continue;
     }
     if (inAgents) {
-      // Agents entries are indented with "  - " or spaces
-      // Stop skipping when we hit a non-indented, non-empty line
-      if (/^\S/.test(line) && line.trim().length > 0) {
+      // Lines within the agents section are indented (start with whitespace or "- ")
+      // A non-blank, non-indented line means the agents section has ended
+      if (line.trim().length > 0 && !/^\s/.test(line)) {
         inAgents = false;
         result.push(line);
       }

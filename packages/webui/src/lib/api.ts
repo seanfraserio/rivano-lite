@@ -1,13 +1,42 @@
 const API_BASE = typeof window !== "undefined" ? "" : "http://localhost:9000";
 
-async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...opts?.headers },
-    ...opts,
-  });
-  if (!res.ok) {
-    throw new Error(`API ${path}: ${res.status} ${res.statusText}`);
+/**
+ * Retrieve the API key for authenticating requests.
+ * In the browser, this is stored in localStorage after the user enters it.
+ * On the server (SSR), it falls back to the environment variable.
+ */
+function getApiKey(): string | null {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("rivano_api_key");
   }
+  return process.env.RIVANO_API_KEY ?? null;
+}
+
+async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
+  const apiKey = getApiKey();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  }
+
+  // For PUT/POST with body, merge headers after content-type
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...opts,
+    headers: { ...headers, ...(opts?.headers as Record<string, string> | undefined) },
+  });
+
+  if (!res.ok) {
+    // If we get 401 and have a key, clear it (likely expired/invalid)
+    if (res.status === 401 && apiKey) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("rivano_api_key");
+      }
+    }
+    const body = await res.text().catch(() => "");
+    throw new Error(`API ${path}: ${res.status} ${res.statusText}${body ? ` — ${body}` : ""}`);
+  }
+
   return res.json();
 }
 
@@ -102,4 +131,26 @@ export const api = {
 
   trace: (id: string) => apiFetch<TraceListItem>(`/api/traces/${id}`),
   traceStats: () => apiFetch<TraceStats>("/api/traces/stats"),
+
+  /** Store the API key in localStorage for future requests */
+  setApiKey: (key: string) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("rivano_api_key", key);
+    }
+  },
+
+  /** Remove the stored API key */
+  clearApiKey: () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("rivano_api_key");
+    }
+  },
+
+  /** Check if an API key is stored */
+  hasApiKey: (): boolean => {
+    if (typeof window !== "undefined") {
+      return !!localStorage.getItem("rivano_api_key");
+    }
+    return false;
+  },
 };
