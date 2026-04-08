@@ -228,6 +228,14 @@ export function AgentsView() {
       }
 
       const mergedYaml = mergeAgentsIntoYaml(rawYaml, configAgents);
+
+      // Validate before saving to give clear error messages
+      const validation = await api.validateConfig(mergedYaml);
+      if (!validation.valid) {
+        setError(`Validation error: ${validation.errors?.join(", ") ?? "unknown"}`);
+        return;
+      }
+
       await api.saveConfig(mergedYaml);
       setShowForm(false);
       setEditIndex(null);
@@ -256,6 +264,13 @@ export function AgentsView() {
       const targetName = agents[index].name;
       const filtered = configAgents.filter((a) => a.name !== targetName);
       const mergedYaml = mergeAgentsIntoYaml(rawYaml, filtered);
+
+      const validation = await api.validateConfig(mergedYaml);
+      if (!validation.valid) {
+        setError(`Validation error: ${validation.errors?.join(", ") ?? "unknown"}`);
+        return;
+      }
+
       await api.saveConfig(mergedYaml);
       await loadData();
     } catch (err) {
