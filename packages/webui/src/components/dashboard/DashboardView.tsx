@@ -29,12 +29,19 @@ export function DashboardView() {
     error: null,
   });
 
+  const [authRequired, setAuthRequired] = useState(false);
+
   useEffect(() => {
     async function load() {
       try {
         const [health, status, stats, policyRes] = await Promise.all([
           api.health(),
-          api.status(),
+          api.status().catch((err) => {
+            if (err instanceof Error && (err.message.includes("401") || err.message.includes("API key"))) {
+              setAuthRequired(true);
+            }
+            return null;
+          }),
           api.traceStats().catch(() => null),
           fetch("/api/policy-activity")
             .then((r) => r.json())
@@ -78,6 +85,14 @@ export function DashboardView() {
 
   return (
     <div className="p-6 space-y-6">
+      {authRequired && !status && (
+        <div className="bg-warning/10 border border-warning/30 rounded-lg p-4">
+          <p className="font-medium text-warning">API Key Required</p>
+          <p className="text-sm mt-1 text-text-secondary">
+            Set your API key in <a href="/settings" className="text-rivano-400 hover:underline">Settings</a> to view dashboard data.
+          </p>
+        </div>
+      )}
       {/* Header */}
       <div>
         <h1 className="text-lg font-semibold text-text-primary">Dashboard</h1>

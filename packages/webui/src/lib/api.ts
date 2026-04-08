@@ -27,13 +27,21 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
-    // If we get 401 and have a key, clear it (likely expired/invalid)
+    // If we get 401, clear stored key (likely invalid)
     if (res.status === 401 && apiKey) {
       if (typeof window !== "undefined") {
         localStorage.removeItem("rivano_api_key");
       }
     }
     const body = await res.text().catch(() => "");
+    // Provide friendly auth error message
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        apiKey
+          ? `API key is invalid or expired. Please update it in Settings → API Authentication.`
+          : `Set your API key in Settings → API Authentication to access ${path}.`
+      );
+    }
     throw new Error(`API ${path}: ${res.status} ${res.statusText}${body ? ` — ${body}` : ""}`);
   }
 
