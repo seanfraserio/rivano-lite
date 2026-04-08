@@ -37,7 +37,7 @@ describe("validate", () => {
   test("rejects unsupported provider", () => {
     const agents = [
       { name: "test", model: { provider: "unsupported", name: "test" }, system_prompt: "test" },
-    ] as AgentConfig[];
+    ] as unknown as AgentConfig[];
     const result = validate(agents);
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => e.error.includes("Unsupported provider"))).toBe(true);
