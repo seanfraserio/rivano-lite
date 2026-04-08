@@ -214,26 +214,31 @@ export function AgentsView() {
     try {
       // Fetch raw YAML to preserve existing config structure and API keys
       const { yaml: rawYaml } = await api.configRaw();
-      const currentConfig = config || {};
-      const configAgents: AgentConfig[] = Array.isArray(
-        (currentConfig as { agents?: AgentConfig[] }).agents
-      )
-        ? [...(currentConfig as { agents: AgentConfig[] }).agents]
-        : [];
+
+      // Build agents list from UI state (merges deployed + config agents)
+      const mergedAgents = agents.map((a) => ({
+        name: a.name,
+        description: a.description,
+        provider: a.provider,
+        model: a.model,
+        temperature: a.temperature,
+        max_tokens: a.max_tokens,
+        system_prompt: a.system_prompt,
+      }));
 
       if (editIndex !== null) {
         const oldName = agents[editIndex].name;
-        const idx = configAgents.findIndex((a) => a.name === oldName);
+        const idx = mergedAgents.findIndex((a) => a.name === oldName);
         if (idx >= 0) {
-          configAgents[idx] = { ...form };
+          mergedAgents[idx] = { ...form };
         } else {
-          configAgents.push({ ...form });
+          mergedAgents.push({ ...form });
         }
       } else {
-        configAgents.push({ ...form });
+        mergedAgents.push({ ...form });
       }
 
-      const mergedYaml = mergeAgentsIntoYaml(rawYaml, configAgents);
+      const mergedYaml = mergeAgentsIntoYaml(rawYaml, mergedAgents);
 
       // Validate before saving to give clear error messages
       const validation = await api.validateConfig(mergedYaml);
@@ -260,16 +265,22 @@ export function AgentsView() {
     setError(null);
     try {
       const { yaml: rawYaml } = await api.configRaw();
-      const currentConfig = config || {};
-      const configAgents: AgentConfig[] = Array.isArray(
-        (currentConfig as { agents?: AgentConfig[] }).agents
-      )
-        ? [...(currentConfig as { agents: AgentConfig[] }).agents]
-        : [];
 
+      // Build agents list from UI state (merges deployed + config agents)
       const targetName = agents[index].name;
-      const filtered = configAgents.filter((a) => a.name !== targetName);
-      const mergedYaml = mergeAgentsIntoYaml(rawYaml, filtered);
+      const remainingAgents = agents
+        .filter((a) => a.name !== targetName)
+        .map((a) => ({
+          name: a.name,
+          description: a.description,
+          provider: a.provider,
+          model: a.model,
+          temperature: a.temperature,
+          max_tokens: a.max_tokens,
+          system_prompt: a.system_prompt,
+        }));
+
+      const mergedYaml = mergeAgentsIntoYaml(rawYaml, remainingAgents);
 
       const validation = await api.validateConfig(mergedYaml);
       if (!validation.valid) {
