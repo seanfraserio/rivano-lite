@@ -43,9 +43,7 @@ export function DashboardView() {
             return null;
           }),
           api.traceStats().catch(() => null),
-          fetch("/api/policy-activity")
-            .then((r) => r.json())
-            .catch(() => null),
+          api.policyActivity(),
         ]);
         setData({
           health,

@@ -2,14 +2,6 @@ import { useEffect, useState } from "react";
 import { api, type HealthStatus } from "../../lib/api";
 import { Card } from "../shared/Card";
 
-/** Build auth headers from localStorage for raw fetch calls */
-function authHeaders(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  const apiKey = localStorage.getItem("rivano_api_key");
-  if (!apiKey) return {};
-  return { Authorization: `Bearer ${apiKey}` };
-}
-
 interface EnvKey {
   key: string;
   masked: string;
@@ -59,12 +51,8 @@ export function SettingsView() {
       const [h, status, env, stor] = await Promise.all([
         api.health().catch(() => null),
         api.status().catch(() => null),
-        fetch("/api/env", { headers: authHeaders() })
-          .then((r) => r.json())
-          .catch(() => ({ keys: [] })),
-        fetch("/api/storage", { headers: authHeaders() })
-          .then((r) => r.json())
-          .catch(() => null),
+        api.envKeys().catch(() => ({ keys: [] })),
+        api.storage().catch(() => null),
       ]);
       if (h) setHealth(h);
       if (status) {
@@ -92,20 +80,15 @@ export function SettingsView() {
     if (!newKey.trim()) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/env", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ key: newKey.trim(), value: newValue }),
-      });
-      const data = await res.json();
+      const data = await api.saveEnvVar(newKey.trim(), newValue);
       if (data.ok) {
         setMessage({ type: "ok", text: `${newKey} saved successfully.` });
         setNewKey("");
         setNewValue("");
-        const env = await fetch("/api/env", { headers: authHeaders() }).then((r) => r.json());
+        const env = await api.envKeys();
         setEnvKeys(env.keys || []);
       } else {
-        setMessage({ type: "error", text: data.error || "Failed to save" });
+        setMessage({ type: "error", text: "Failed to save" });
       }
     } catch {
       setMessage({ type: "error", text: "Connection error" });
@@ -116,15 +99,10 @@ export function SettingsView() {
 
   async function removeEnvVar(key: string) {
     try {
-      const res = await fetch("/api/env", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ key }),
-      });
-      const data = await res.json();
+      const data = await api.removeEnvVar(key);
       if (data.ok) {
         setMessage({ type: "ok", text: `${key} removed.` });
-        const env = await fetch("/api/env", { headers: authHeaders() }).then((r) => r.json());
+        const env = await api.envKeys();
         setEnvKeys(env.keys || []);
       }
     } catch {
@@ -136,12 +114,9 @@ export function SettingsView() {
   async function purgeTraces() {
     if (!confirm("Delete traces older than the retention period?")) return;
     try {
-      const res = await fetch("/api/traces", { method: "DELETE", headers: authHeaders() });
-      const data = await res.json();
+      const data = await api.purgeTraces();
       setMessage({ type: "ok", text: `Purged ${data.deleted} old traces.` });
-      const stor = await fetch("/api/storage", { headers: authHeaders() })
-        .then((r) => r.json())
-        .catch(() => null);
+      const stor = await api.storage().catch(() => null);
       setStorage(stor);
     } catch {
       setMessage({ type: "error", text: "Purge failed" });
