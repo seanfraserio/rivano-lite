@@ -4,16 +4,7 @@ import YAML from "js-yaml";
 import { validateConfig } from "@rivano/core";
 import { CONFIG_PATH, API_KEY } from "../state.js";
 import type { ServerState } from "../state.js";
-
-// Simple mutex to prevent concurrent config/env writes
-let writeLock = Promise.resolve();
-
-function withLock<T>(fn: () => Promise<T>): Promise<T> {
-  const prev = writeLock;
-  let resolve: () => void;
-  writeLock = new Promise((r) => { resolve = r; });
-  return prev.then(() => fn()).finally(() => resolve!());
-}
+import { withLock } from "../utils/lock.js";
 
 export function sanitizeYamlObj(obj: unknown): unknown {
   if (typeof obj !== "object" || obj === null) return obj;

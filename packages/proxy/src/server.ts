@@ -132,15 +132,7 @@ export function createProxyServer(
         }
       }
 
-      // Create an AbortController with a 60s timeout for upstream provider calls
-      const providerCtrl = new AbortController();
-      const providerTimeout = setTimeout(() => providerCtrl.abort(), 60_000);
-
-      try {
-        providerResponse = await providerFn(path, body, rawHeaders, providerCtrl.signal);
-      } finally {
-        clearTimeout(providerTimeout);
-      }
+      providerResponse = await providerFn(path, body, rawHeaders);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
         return reply.status(504).send({ error: "Provider request timed out" });

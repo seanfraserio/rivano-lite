@@ -10,9 +10,10 @@ interface TokenBucket {
 interface RateLimitConfig {
   requests_per_minute: number;
   burst?: number;
+  maxBuckets?: number;
 }
 
-const MAX_BUCKETS = 10_000;
+const DEFAULT_MAX_BUCKETS = 10_000;
 const STALE_MS = 300_000; // 5 minutes — remove buckets not used in this time
 const CLEANUP_INTERVAL_MS = 60_000; // Run cleanup every 60 seconds
 
@@ -20,6 +21,7 @@ export function createRateLimitMiddleware(config: RateLimitConfig): Middleware &
   const buckets = new Map<string, TokenBucket>();
   const maxTokens = config.burst ?? config.requests_per_minute;
   const refillRate = config.requests_per_minute / 60;
+  const maxBuckets = config.maxBuckets ?? DEFAULT_MAX_BUCKETS;
 
   function getKey(ctx: PipelineContext): string {
     return (ctx.metadata.ip as string) ?? "global";
@@ -54,7 +56,7 @@ export function createRateLimitMiddleware(config: RateLimitConfig): Middleware &
 
       if (!bucket) {
         // Evict stalest bucket if at capacity (found during cleanup)
-        if (buckets.size >= MAX_BUCKETS) {
+        if (buckets.size >= maxBuckets) {
           let stalestKey: string | null = null;
           let stalestTime = Infinity;
           for (const [k, b] of buckets) {

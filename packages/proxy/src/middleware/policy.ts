@@ -1,5 +1,5 @@
 import type { Policy, PipelineContext, PipelineResult } from "@rivano/core";
-import { evaluatePolicies, redactPii } from "@rivano/core";
+import { evaluatePolicies, redactPii, extractMessageText } from "@rivano/core";
 import type { Middleware } from "../pipeline.js";
 
 function extractText(ctx: PipelineContext, phase: "request" | "response"): string {
@@ -35,12 +35,7 @@ function extractText(ctx: PipelineContext, phase: "request" | "response"): strin
     }
   }
   // For request phase (or when no response is available), use request messages
-  return ctx.messages
-    .map((m) => {
-      const msg = m as { content?: string };
-      return typeof msg.content === "string" ? msg.content : "";
-    })
-    .join("\n");
+  return extractMessageText(ctx.messages);
 }
 
 export function createPolicyMiddleware(

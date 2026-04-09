@@ -3,18 +3,9 @@ import { readFile, writeFile, rename } from "fs/promises";
 import { join } from "path";
 import { DATA_DIR } from "../state.js";
 import type { ServerState } from "../state.js";
+import { withLock } from "../utils/lock.js";
 
 const ENV_KEY_PATTERN = /^[A-Z][A-Z0-9_]*$/;
-
-// Simple mutex to prevent concurrent .env file writes
-let writeLock = Promise.resolve();
-
-function withLock<T>(fn: () => Promise<T>): Promise<T> {
-  const prev = writeLock;
-  let resolve: () => void;
-  writeLock = new Promise((r) => { resolve = r; });
-  return prev.then(() => fn()).finally(() => resolve!());
-}
 
 function readEnvLines(envPath: string): Promise<string[]> {
   return readFile(envPath, "utf-8")

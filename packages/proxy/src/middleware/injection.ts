@@ -1,5 +1,5 @@
 import type { PipelineContext, PipelineResult } from "@rivano/core";
-import { scoreInjection } from "@rivano/core";
+import { scoreInjection, extractMessageText } from "@rivano/core";
 import type { Middleware } from "../pipeline.js";
 
 export function createInjectionMiddleware(threshold?: number): Middleware {
@@ -9,13 +9,7 @@ export function createInjectionMiddleware(threshold?: number): Middleware {
     name: "injection",
 
     async execute(ctx: PipelineContext): Promise<PipelineResult> {
-      const content = ctx.messages
-        .map((m) => {
-          const msg = m as { content?: string; role?: string };
-          return typeof msg.content === "string" ? msg.content : "";
-        })
-        .join("\n");
-
+      const content = extractMessageText(ctx.messages);
       const result = scoreInjection(content);
       const score = result.score;
       ctx.metadata.injectionScore = score;

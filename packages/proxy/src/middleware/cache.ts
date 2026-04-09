@@ -10,9 +10,8 @@ interface CacheEntry {
 interface CacheConfig {
   enabled: boolean;
   ttl: number;
+  maxEntries?: number;
 }
-
-const MAX_ENTRIES = 1000;
 
 // Linked-list node for O(1) LRU eviction
 class CacheNode {
@@ -33,6 +32,11 @@ class LRUCache {
   private tail: CacheNode | null = null; // least recent
   private _hits = 0;
   private _misses = 0;
+  private maxEntries: number;
+
+  constructor(maxEntries = 1000) {
+    this.maxEntries = maxEntries;
+  };
 
   get hits() { return this._hits; }
   get misses() { return this._misses; }
@@ -58,7 +62,7 @@ class LRUCache {
     this.addToHead(node);
 
     // Evict least recently used if over capacity
-    while (this.map.size > MAX_ENTRIES && this.tail) {
+    while (this.map.size > this.maxEntries && this.tail) {
       const removed = this.evictTail();
       if (!removed) break;
     }
@@ -100,7 +104,7 @@ class LRUCache {
 }
 
 export function createCacheMiddleware(config: CacheConfig): Middleware {
-  const cache = new LRUCache();
+  const cache = new LRUCache(config.maxEntries);
 
   async function computeKey(
     provider: string,

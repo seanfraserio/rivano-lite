@@ -2,6 +2,9 @@ export type Provider = "anthropic" | "openai" | "ollama" | "bedrock";
 
 export type PolicyAction = "block" | "warn" | "redact" | "tag";
 
+/** Past-tense version of PolicyAction for audit entries describing completed actions */
+export type AuditAction = "allowed" | "blocked" | "redacted" | "warned";
+
 export interface PolicyCondition {
   contains?: string;
   regex?: string;
@@ -148,7 +151,7 @@ export interface AuditEntry {
   traceId?: string;
   provider: Provider;
   model: string;
-  action: "allowed" | "blocked" | "redacted" | "warned";
+  action: AuditAction;
   reason?: string;
   latencyMs: number;
   tokensIn?: number;
