@@ -5,6 +5,16 @@ import { validateConfig } from "@rivano/core";
 import { CONFIG_PATH, API_KEY } from "../state.js";
 import type { ServerState } from "../state.js";
 
+// Simple mutex to prevent concurrent config/env writes
+let writeLock = Promise.resolve();
+
+function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = writeLock;
+  let resolve: () => void;
+  writeLock = new Promise((r) => { resolve = r; });
+  return prev.then(() => fn()).finally(() => resolve!());
+}
+
 export function sanitizeYamlObj(obj: unknown): unknown {
   if (typeof obj !== "object" || obj === null) return obj;
   if (Array.isArray(obj)) return obj.map(sanitizeYamlObj);
@@ -60,15 +70,17 @@ export function registerConfigRoutes(app: FastifyInstance, state: ServerState, r
       const parsed = sanitizeYamlObj(YAML.load(yaml, { schema: YAML.JSON_SCHEMA }));
       validateConfig(parsed);
 
-      // Write atomically (tmp + rename)
-      const tmpPath = CONFIG_PATH + ".tmp";
-      await writeFile(tmpPath, yaml, "utf-8");
-      await rename(tmpPath, CONFIG_PATH);
+      return withLock(async () => {
+        // Write atomically (tmp + rename)
+        const tmpPath = CONFIG_PATH + ".tmp";
+        await writeFile(tmpPath, yaml, "utf-8");
+        await rename(tmpPath, CONFIG_PATH);
 
-      await reload();
+        await reload();
 
-      state.bufferLog("info", "Config updated via WebUI — services reloaded");
-      return { ok: true };
+        state.bufferLog("info", "Config updated via WebUI — services reloaded");
+        return { ok: true };
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       state.bufferLog("error", `Config update failed: ${message}`);

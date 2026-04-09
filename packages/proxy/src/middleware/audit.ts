@@ -1,7 +1,7 @@
 import type { PipelineContext, PipelineResult, AuditEntry, Trace, Span } from "@rivano/core";
 import { estimateCost } from "@rivano/core";
 import type { Middleware } from "../pipeline.js";
-import { appendFileSync } from "node:fs";
+import { appendFile } from "node:fs/promises";
 
 interface AuditConfig {
   output?: "stdout" | "file";
@@ -55,7 +55,9 @@ export function createAuditMiddleware(config?: AuditConfig): Middleware {
       const line = JSON.stringify(entry);
 
       if (output === "file") {
-        appendFileSync(filePath, line + "\n");
+        await appendFile(filePath, line + "\n").catch((err) => {
+          console.error("[rivano] Failed to write audit log:", err);
+        });
       } else {
         console.log(line);
       }

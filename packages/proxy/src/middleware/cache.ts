@@ -14,11 +14,93 @@ interface CacheConfig {
 
 const MAX_ENTRIES = 1000;
 
+// Linked-list node for O(1) LRU eviction
+class CacheNode {
+  key: string;
+  entry: CacheEntry;
+  prev: CacheNode | null = null;
+  next: CacheNode | null = null;
+
+  constructor(key: string, entry: CacheEntry) {
+    this.key = key;
+    this.entry = entry;
+  }
+}
+
+class LRUCache {
+  private map = new Map<string, CacheNode>();
+  private head: CacheNode | null = null; // most recent
+  private tail: CacheNode | null = null; // least recent
+  private _hits = 0;
+  private _misses = 0;
+
+  get hits() { return this._hits; }
+  get misses() { return this._misses; }
+  get size() { return this.map.size; }
+
+  get(key: string): CacheEntry | undefined {
+    const node = this.map.get(key);
+    if (!node) return undefined;
+    this.moveToHead(node);
+    return node.entry;
+  }
+
+  set(key: string, entry: CacheEntry): void {
+    const existing = this.map.get(key);
+    if (existing) {
+      existing.entry = entry;
+      this.moveToHead(existing);
+      return;
+    }
+
+    const node = new CacheNode(key, entry);
+    this.map.set(key, node);
+    this.addToHead(node);
+
+    // Evict least recently used if over capacity
+    while (this.map.size > MAX_ENTRIES && this.tail) {
+      const removed = this.evictTail();
+      if (!removed) break;
+    }
+  }
+
+  incrementMisses(): void { this._misses++; }
+  incrementHits(): void { this._hits++; }
+
+  private moveToHead(node: CacheNode): void {
+    if (node === this.head) return;
+    this.removeNode(node);
+    this.addToHead(node);
+  }
+
+  private addToHead(node: CacheNode): void {
+    node.prev = null;
+    node.next = this.head;
+    if (this.head) this.head.prev = node;
+    this.head = node;
+    if (!this.tail) this.tail = node;
+  }
+
+  private removeNode(node: CacheNode): void {
+    if (node.prev) node.prev.next = node.next;
+    else this.head = node.next;
+    if (node.next) node.next.prev = node.prev;
+    else this.tail = node.prev;
+    node.prev = null;
+    node.next = null;
+  }
+
+  private evictTail(): CacheNode | null {
+    if (!this.tail) return null;
+    const node = this.tail;
+    this.removeNode(node);
+    this.map.delete(node.key);
+    return node;
+  }
+}
+
 export function createCacheMiddleware(config: CacheConfig): Middleware {
-  const cache = new Map<string, CacheEntry>();
-  const accessOrder: string[] = [];
-  let hits = 0;
-  let misses = 0;
+  const cache = new LRUCache();
 
   async function computeKey(
     provider: string,
@@ -33,21 +115,6 @@ export function createCacheMiddleware(config: CacheConfig): Middleware {
     return Array.from(new Uint8Array(hash))
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
-  }
-
-  function evict(): void {
-    while (cache.size >= MAX_ENTRIES && accessOrder.length > 0) {
-      const oldest = accessOrder.shift()!;
-      cache.delete(oldest);
-    }
-  }
-
-  function touch(key: string): void {
-    const idx = accessOrder.indexOf(key);
-    if (idx !== -1) {
-      accessOrder.splice(idx, 1);
-    }
-    accessOrder.push(key);
   }
 
   return {
@@ -69,27 +136,24 @@ export function createCacheMiddleware(config: CacheConfig): Middleware {
       if (!isResponsePhase) {
         const entry = cache.get(key);
         if (entry && Date.now() - entry.createdAt < config.ttl * 1000) {
-          hits++;
-          touch(key);
+          cache.incrementHits();
           ctx.metadata.providerResponse = entry.response;
           ctx.metadata.cacheHit = true;
-          ctx.metadata.cacheStats = { hits, misses, size: cache.size };
+          ctx.metadata.cacheStats = { hits: cache.hits, misses: cache.misses, size: cache.size };
           return "short-circuit";
         }
-        misses++;
+        cache.incrementMisses();
         ctx.metadata.cacheHit = false;
         return "continue";
       }
 
-      evict();
       const entry: CacheEntry = {
         response: ctx.metadata.providerResponse,
         createdAt: Date.now(),
         key,
       };
       cache.set(key, entry);
-      touch(key);
-      ctx.metadata.cacheStats = { hits, misses, size: cache.size };
+      ctx.metadata.cacheStats = { hits: cache.hits, misses: cache.misses, size: cache.size };
       return "continue";
     },
   };

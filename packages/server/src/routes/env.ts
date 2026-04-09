@@ -6,6 +6,16 @@ import type { ServerState } from "../state.js";
 
 const ENV_KEY_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
+// Simple mutex to prevent concurrent .env file writes
+let writeLock = Promise.resolve();
+
+function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = writeLock;
+  let resolve: () => void;
+  writeLock = new Promise((r) => { resolve = r; });
+  return prev.then(() => fn()).finally(() => resolve!());
+}
+
 function readEnvLines(envPath: string): Promise<string[]> {
   return readFile(envPath, "utf-8")
     .then((raw) => raw.split("\n"))
@@ -54,21 +64,25 @@ export function registerEnvRoutes(app: FastifyInstance, state: ServerState) {
         return reply.status(400).send({ ok: false, error: "Invalid value: must not contain newlines" });
       }
 
-      const envPath = join(DATA_DIR, ".env");
-      const lines = await readEnvLines(envPath);
+      return withLock(async () => {
+        const envPath = join(DATA_DIR, ".env");
+        const lines = await readEnvLines(envPath);
 
-      const existingIdx = lines.findIndex((l) => l.startsWith(`${key}=`));
-      const newLine = `${key}=${value}`;
-      if (existingIdx >= 0) {
-        lines[existingIdx] = newLine;
-      } else {
-        lines.push(newLine);
-      }
+        const existingIdx = lines.findIndex((l) => l.startsWith(`${key}=`));
+        const newLine = `${key}=${value}`;
+        if (existingIdx >= 0) {
+          lines[existingIdx] = newLine;
+        } else {
+          lines.push(newLine);
+        }
 
-      await writeEnvLines(envPath, lines);
-      state.bufferLog("info", `Environment variable ${key} updated`);
-      return { ok: true };
+        await writeEnvLines(envPath, lines);
+        state.bufferLog("info", `Environment variable ${key} updated`);
+        return { ok: true };
+      });
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      state.bufferLog("error", `Env update failed: ${message}`);
       return reply.status(500).send({ ok: false, error: "Failed to save environment variable" });
     }
   });
@@ -81,18 +95,22 @@ export function registerEnvRoutes(app: FastifyInstance, state: ServerState) {
         return reply.status(400).send({ ok: false, error: "Invalid key" });
       }
 
-      const envPath = join(DATA_DIR, ".env");
-      const lines = await readEnvLines(envPath);
-      const filtered = lines.filter((l) => !l.startsWith(`${key}=`));
+      return withLock(async () => {
+        const envPath = join(DATA_DIR, ".env");
+        const lines = await readEnvLines(envPath);
+        const filtered = lines.filter((l) => !l.startsWith(`${key}=`));
 
-      if (filtered.length === lines.length) {
-        return reply.status(404).send({ ok: false, error: "Key not found" });
-      }
+        if (filtered.length === lines.length) {
+          return reply.status(404).send({ ok: false, error: "Key not found" });
+        }
 
-      await writeEnvLines(envPath, filtered);
-      state.bufferLog("info", `Environment variable ${key} removed`);
-      return { ok: true };
+        await writeEnvLines(envPath, filtered);
+        state.bufferLog("info", `Environment variable ${key} removed`);
+        return { ok: true };
+      });
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      state.bufferLog("error", `Env delete failed: ${message}`);
       return reply.status(500).send({ ok: false, error: "Failed to remove environment variable" });
     }
   });

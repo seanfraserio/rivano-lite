@@ -35,9 +35,12 @@ RUN cd packages/core && bun run build && \
 RUN cd packages/webui && bun install && bun run build
 
 # Stage 2: Production runtime (minimal)
-FROM oven/bun:1-alpine
+FROM oven/bun:1.2-alpine
 
 RUN apk add --no-cache curl tini
+
+# Create non-root user for security
+RUN adduser -D -u 1000 rivano
 
 WORKDIR /rivano
 
@@ -53,7 +56,9 @@ COPY container/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
 # Data directory (mounted as volume)
-RUN mkdir -p /data
+RUN mkdir -p /data && chown -R rivano:rivano /data /rivano
+
+USER rivano
 
 # Ports: WebUI(9000), Proxy(4000), Observer(4100)
 EXPOSE 9000 4000 4100

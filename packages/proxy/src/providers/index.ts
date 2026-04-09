@@ -15,8 +15,11 @@ const PROVIDER_PATH_MAP: Record<string, string> = {
 };
 
 export function detectProvider(path: string): string | null {
+  // Match against path segments to avoid false prefix matches
+  // e.g. /v1/messages-extended should not match /v1/messages
+  const normalizedPath = path.split("?")[0].split("#")[0]; // strip query/hash
   for (const [prefix, provider] of Object.entries(PROVIDER_PATH_MAP)) {
-    if (path.startsWith(prefix)) {
+    if (normalizedPath === prefix || normalizedPath.startsWith(prefix + "/")) {
       return provider;
     }
   }

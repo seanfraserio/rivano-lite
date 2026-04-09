@@ -60,8 +60,28 @@ export function DashboardView() {
       }
     }
     load();
-    const interval = setInterval(load, 5000);
-    return () => clearInterval(interval);
+
+    let interval: ReturnType<typeof setInterval>;
+    const startPolling = () => {
+      interval = setInterval(load, 5000);
+    };
+    const stopPolling = () => clearInterval(interval);
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        load();
+        startPolling();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    startPolling();
+
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   if (data.error && !data.health) {

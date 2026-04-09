@@ -21,9 +21,10 @@ export function createAnthropicProvider(config: ProviderConfig) {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
-    // Combine external signal with our timeout
+    // Forward external abort signal to our controller
+    const onExternalAbort = () => controller.abort();
     if (signal) {
-      signal.addEventListener("abort", () => controller.abort());
+      signal.addEventListener("abort", onExternalAbort);
     }
 
     try {
@@ -61,6 +62,9 @@ export function createAnthropicProvider(config: ProviderConfig) {
       };
     } finally {
       clearTimeout(timeout);
+      if (signal) {
+        signal.removeEventListener("abort", onExternalAbort);
+      }
     }
   };
 }

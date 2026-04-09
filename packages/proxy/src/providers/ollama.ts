@@ -21,12 +21,15 @@ export function createOllamaProvider(config: ProviderConfig) {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+    // Forward external abort signal to our controller
+    const onExternalAbort = () => controller.abort();
     if (signal) {
-      signal.addEventListener("abort", () => controller.abort());
+      signal.addEventListener("abort", onExternalAbort);
     }
 
     try {
-      const response = await fetch(`${baseUrl}/api/chat`, {
+      const url = path.startsWith("/api/") ? `${baseUrl}${path}` : `${baseUrl}/api/chat`;
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -59,6 +62,9 @@ export function createOllamaProvider(config: ProviderConfig) {
       };
     } finally {
       clearTimeout(timeout);
+      if (signal) {
+        signal.removeEventListener("abort", onExternalAbort);
+      }
     }
   };
 }

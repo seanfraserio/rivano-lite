@@ -19,7 +19,7 @@ export const DB_PATH = resolve(DATA_DIR, "traces.db");
 export const API_KEY = process.env.RIVANO_API_KEY;
 
 export interface ServerState {
-  config: import("@rivano/core").RivanoConfig;
+  config: import("@rivano/core").RivanoConfig | null;
   proxy: FastifyInstance | null;
   observer: FastifyInstance | null;
   storage: Storage | null;

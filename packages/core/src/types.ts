@@ -88,7 +88,6 @@ export interface PipelineMetadata {
   cacheKey?: string;
   cacheStats?: { hits: number; misses: number; size: number };
   rateLimitExceeded?: boolean;
-  apiKey?: string;
   providerResponse?: unknown;
   tokensIn?: number;
   tokensOut?: number;
@@ -126,12 +125,18 @@ export interface Trace {
 
 export type PipelineResult = "continue" | "block" | "short-circuit";
 
+export interface ChatMessage {
+  role: string;
+  content?: string;
+  [key: string]: unknown;
+}
+
 export interface PipelineContext {
   id: string;
   provider: Provider;
   model: string;
   agentName?: string;
-  messages: unknown[];
+  messages: ChatMessage[];
   decisions: Array<{ middleware: string; result: PipelineResult; reason?: string }>;
   startTime: number;
   metadata: PipelineMetadata;

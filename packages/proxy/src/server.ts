@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyReply } from "fastify";
-import type { ProxyConfig, ProviderConfig, PipelineContext, Provider, Trace } from "@rivano/core";
+import { z } from "zod";
+import type { ProxyConfig, ProviderConfig, PipelineContext, Provider, Trace, ChatMessage } from "@rivano/core";
 import { Pipeline } from "./pipeline.js";
 import { createRateLimitMiddleware } from "./middleware/rate-limit.js";
 import { createInjectionMiddleware } from "./middleware/injection.js";
@@ -7,6 +8,14 @@ import { createPolicyMiddleware } from "./middleware/policy.js";
 import { createCacheMiddleware } from "./middleware/cache.js";
 import { createAuditMiddleware } from "./middleware/audit.js";
 import { createProvider, detectProvider, type ProviderFn, type ProviderResponse } from "./providers/index.js";
+
+const ProxyRequestBodySchema = z.object({
+  model: z.string().optional(),
+  messages: z.array(z.record(z.unknown())).optional(),
+  stream: z.boolean().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  max_tokens: z.number().int().positive().optional(),
+}).passthrough();
 
 interface ProxyStats {
   requests: number;
@@ -62,6 +71,13 @@ export function createProxyServer(
   app.post("/*", async (request: FastifyRequest, reply: FastifyReply) => {
     stats.requests++;
 
+    // Validate request body with Zod
+    const parsed = ProxyRequestBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: "Invalid request body", details: parsed.error.issues });
+    }
+    const body = parsed.data;
+
     const path = request.url;
     const providerName =
       (request.headers["x-rivano-provider"] as string) ?? detectProvider(path) ?? config.default_provider;
@@ -75,13 +91,11 @@ export function createProxyServer(
       return reply.status(400).send({ error: `Provider not configured: ${providerName}` });
     }
 
-    const body = request.body as { model?: string; messages?: unknown[] };
-
     const ctx: PipelineContext = {
       id: crypto.randomUUID(),
       provider: providerName as Provider,
       model: body.model ?? "unknown",
-      messages: body.messages ?? [],
+      messages: (body.messages ?? []) as ChatMessage[],
       decisions: [],
       startTime: Date.now(),
       metadata: {
@@ -142,16 +156,34 @@ export function createProxyServer(
         connection: "keep-alive",
       });
 
+      // Buffer streaming response for policy evaluation
+      const chunks: Uint8Array[] = [];
       const reader = providerResponse.stream.getReader();
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+          chunks.push(value);
           reply.raw.write(value);
         }
       } finally {
         reply.raw.end();
       }
+
+      // Set provider response metadata from buffered stream for policy evaluation
+      try {
+        const fullBody = Buffer.concat(chunks).toString("utf-8");
+        // Try to parse as JSON for non-streaming responses that were misidentified
+        try {
+          ctx.metadata.providerResponse = JSON.parse(fullBody);
+        } catch {
+          ctx.metadata.providerResponse = fullBody;
+        }
+      } catch {
+        // If buffering fails, still run response pipeline with what we have
+      }
+      ctx.metadata.tokensIn = providerResponse.tokensIn;
+      ctx.metadata.tokensOut = providerResponse.tokensOut;
 
       await responsePipeline.execute(ctx);
       return;

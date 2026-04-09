@@ -83,9 +83,8 @@ export function createPolicyMiddleware(
         case "redact":
           if (phase === "request") {
             ctx.messages = ctx.messages.map((m) => {
-              const msg = m as { content?: string; role?: string };
-              if (typeof msg.content === "string") {
-                return { ...msg, content: redactPii(msg.content) };
+              if (typeof m.content === "string") {
+                return { ...m, content: redactPii(m.content) };
               }
               return m;
             });

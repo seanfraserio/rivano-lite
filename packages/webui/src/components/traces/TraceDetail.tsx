@@ -1,19 +1,10 @@
 import { useEffect, useState } from "react";
 import { api, type TraceListItem } from "../../lib/api";
+import { formatDuration, formatTimestamp } from "../../lib/format";
 import { SpanTree } from "./SpanTree";
 
 interface Props {
   traceId: string;
-}
-
-function formatTimestamp(ts: number): string {
-  return new Date(ts).toLocaleString();
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1) return "<1ms";
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(2)}s`;
 }
 
 export function TraceDetail({ traceId }: Props) {

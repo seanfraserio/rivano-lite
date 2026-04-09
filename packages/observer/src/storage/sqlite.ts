@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import type { Trace, Span } from "@rivano/core";
+import type { Trace, Span, PipelineMetadata } from "@rivano/core";
 
 export interface ListOptions {
   limit: number;
@@ -57,20 +57,29 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_traces_source ON traces(source);
 `;
 
+function safeJSONParse(val: unknown): unknown {
+  if (!val || typeof val !== "string") return undefined;
+  try {
+    return JSON.parse(val);
+  } catch {
+    return undefined;
+  }
+}
+
 function rowToSpan(row: Record<string, unknown>): Span {
   return {
     id: row.id as string,
     traceId: row.trace_id as string,
-    parentSpanId: (row.parent_span_id as string) || undefined,
+    parentSpanId: (row.parent_span_id as string) ?? undefined,
     type: row.type as Span["type"],
     name: row.name as string,
-    input: row.input ? JSON.parse(row.input as string) : undefined,
-    output: row.output ? JSON.parse(row.output as string) : undefined,
-    error: (row.error as string) || undefined,
+    input: safeJSONParse(row.input),
+    output: safeJSONParse(row.output),
+    error: (row.error as string) ?? undefined,
     startTime: row.start_time as number,
-    endTime: (row.end_time as number) || undefined,
-    estimatedCostUsd: (row.estimated_cost_usd as number) || undefined,
-    metadata: row.metadata ? JSON.parse(row.metadata as string) : undefined,
+    endTime: (row.end_time as number) ?? undefined,
+    estimatedCostUsd: (row.estimated_cost_usd as number) ?? undefined,
+    metadata: safeJSONParse(row.metadata) as PipelineMetadata | undefined,
   };
 }
 
@@ -80,12 +89,12 @@ function rowToTrace(
 ): Trace {
   return {
     id: row.id as string,
-    source: (row.source as string) || undefined,
+    source: (row.source as string) ?? undefined,
     startTime: row.start_time as number,
-    endTime: (row.end_time as number) || undefined,
-    totalCostUsd: (row.total_cost_usd as number) || undefined,
+    endTime: (row.end_time as number) ?? undefined,
+    totalCostUsd: (row.total_cost_usd as number) ?? undefined,
     spans,
-    metadata: row.metadata ? JSON.parse(row.metadata as string) : undefined,
+    metadata: safeJSONParse(row.metadata) as PipelineMetadata | undefined,
   };
 }
 

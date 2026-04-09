@@ -16,13 +16,13 @@ const MAX_BUCKETS = 10_000;
 const STALE_MS = 300_000; // 5 minutes — remove buckets not used in this time
 const CLEANUP_INTERVAL_MS = 60_000; // Run cleanup every 60 seconds
 
-export function createRateLimitMiddleware(config: RateLimitConfig): Middleware {
+export function createRateLimitMiddleware(config: RateLimitConfig): Middleware & { destroy: () => void } {
   const buckets = new Map<string, TokenBucket>();
   const maxTokens = config.burst ?? config.requests_per_minute;
   const refillRate = config.requests_per_minute / 60;
 
   function getKey(ctx: PipelineContext): string {
-    return (ctx.metadata.apiKey as string) ?? (ctx.metadata.ip as string) ?? "global";
+    return (ctx.metadata.ip as string) ?? "global";
   }
 
   function refill(bucket: TokenBucket, now: number): void {
@@ -43,7 +43,7 @@ export function createRateLimitMiddleware(config: RateLimitConfig): Middleware {
   // Allow the process to exit even if the interval is running
   if (cleanup.unref) cleanup.unref();
 
-  return {
+  const middleware: Middleware & { destroy: () => void } = {
     name: "rate-limit",
 
     async execute(ctx: PipelineContext): Promise<PipelineResult> {
@@ -53,17 +53,17 @@ export function createRateLimitMiddleware(config: RateLimitConfig): Middleware {
       let bucket = buckets.get(key);
 
       if (!bucket) {
-        // Evict oldest bucket if at capacity
+        // Evict stalest bucket if at capacity (found during cleanup)
         if (buckets.size >= MAX_BUCKETS) {
-          let oldestKey: string | null = null;
-          let oldestTime = Infinity;
+          let stalestKey: string | null = null;
+          let stalestTime = Infinity;
           for (const [k, b] of buckets) {
-            if (b.lastRefill < oldestTime) {
-              oldestTime = b.lastRefill;
-              oldestKey = k;
+            if (b.lastRefill < stalestTime) {
+              stalestTime = b.lastRefill;
+              stalestKey = k;
             }
           }
-          if (oldestKey) buckets.delete(oldestKey);
+          if (stalestKey) buckets.delete(stalestKey);
         }
 
         bucket = { tokens: maxTokens, lastRefill: now, createdAt: now };
@@ -82,5 +82,12 @@ export function createRateLimitMiddleware(config: RateLimitConfig): Middleware {
       bucket.tokens -= 1;
       return "continue";
     },
+
+    destroy() {
+      clearInterval(cleanup);
+      buckets.clear();
+    },
   };
+
+  return middleware;
 }

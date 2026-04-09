@@ -84,14 +84,15 @@ export function interpolateEnvVars(text: string): string {
     const value = process.env[trimmed];
     if (value === undefined) {
       missing.push(trimmed);
-      return "";
+      return match; // Leave the ${VAR} placeholder intact so it's obvious what's missing
     }
     return value;
   });
 
   if (missing.length > 0) {
     console.warn(`[rivano] Warning: Unset environment variables: ${missing.join(", ")}. ` +
-      "Providers with empty API keys will fail. Set these in your .env file or environment.");
+      "These were left as placeholders. Providers with unresolved API keys will fail. " +
+      "Set these in your .env file or environment.");
   }
 
   return result;

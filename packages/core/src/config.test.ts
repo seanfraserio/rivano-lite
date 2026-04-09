@@ -18,9 +18,9 @@ describe("interpolateEnvVars", () => {
     delete process.env.PORT_VAR;
   });
 
-  test("replaces unset env vars with empty string", () => {
+  test("leaves unset env vars as placeholders", () => {
     const result = interpolateEnvVars("key: ${NONEXISTENT_VAR_12345}");
-    expect(result).toBe("key: ");
+    expect(result).toBe("key: ${NONEXISTENT_VAR_12345}");
   });
 
   test("warns about missing environment variables (via console.warn)", () => {

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { api, type TraceListItem, type TraceStats } from "../../lib/api";
+import { formatDuration } from "../../lib/format";
 import { TraceDetail } from "./TraceDetail";
 
 const PAGE_SIZE = 25;
@@ -18,12 +19,6 @@ function timeAgo(ts: number): string {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86400)}d ago`;
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1) return "<1ms";
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(2)}s`;
 }
 
 export function TracesView() {

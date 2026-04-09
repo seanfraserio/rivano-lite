@@ -5,6 +5,7 @@ import { deploy } from "@rivano/engine";
 import { watch } from "fs";
 import { readFile, writeFile, stat } from "fs/promises";
 import { resolve } from "path";
+import { timingSafeEqual } from "node:crypto";
 import { type ServerState, type LogEntry, DATA_DIR, CONFIG_PATH, DB_PATH, API_KEY, VERSION } from "./state.js";
 import { registerConfigRoutes } from "./routes/config.js";
 import { registerTraceRoutes } from "./routes/traces.js";
@@ -25,7 +26,7 @@ let reloadInProgress = false;
 const MAX_LOG_BUFFER = 500;
 
 const state: ServerState = {
-  config: null!,
+  config: null,
   proxy: null,
   observer: null,
   storage: null,
@@ -125,11 +126,24 @@ async function deployAgents(config: RivanoConfig) {
 }
 
 async function reloadServices() {
-  const newConfig = await loadAndValidateConfig();
-  state.config = newConfig;
-  await startObserver(newConfig);
-  await startProxy(newConfig);
-  await deployAgents(newConfig);
+  const previousConfig = state.config;
+  try {
+    const newConfig = await loadAndValidateConfig();
+    // Try to start all services before committing to new config
+    // If any service fails, keep the previous config running
+    await startObserver(newConfig);
+    await startProxy(newConfig);
+    await deployAgents(newConfig);
+    state.config = newConfig;
+  } catch (err) {
+    // Roll back to previous config if reload fails
+    if (previousConfig) {
+      state.config = previousConfig;
+      state.bufferLog("error", `Reload failed, keeping previous config: ${err}`);
+      console.error("[rivano] Reload failed, keeping previous config:", err);
+    }
+    throw err;
+  }
 }
 
 async function startWebUI() {
@@ -142,13 +156,22 @@ async function startWebUI() {
   if (!API_KEY) {
     console.warn("[rivano] WARNING: No RIVANO_API_KEY set — API endpoints are unauthenticated!");
     console.warn("[rivano] Set RIVANO_API_KEY environment variable to secure the API.");
+  } else if (API_KEY.length < 16) {
+    console.warn(`[rivano] WARNING: RIVANO_API_KEY is only ${API_KEY.length} characters — consider using a longer key (≥16 chars) for security.`);
+  }
+
+  function isAuthenticated(authHeader: string | undefined): boolean {
+    if (!API_KEY) return true; // No API key configured = auth disabled
+    if (!authHeader) return false;
+    const expected = `Bearer ${API_KEY}`;
+    if (authHeader.length !== expected.length) return false;
+    return timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
   }
 
   app.addHook("onRequest", async (request, reply) => {
     if (!request.url.startsWith("/api")) return;
     if (!API_KEY) return;
-    const auth = request.headers["authorization"];
-    if (auth === `Bearer ${API_KEY}`) return;
+    if (isAuthenticated(request.headers["authorization"])) return;
     return reply.status(401).send({ error: "Unauthorized: provide a valid API key via Authorization: Bearer <key>" });
   });
 
@@ -190,10 +213,10 @@ async function startWebUI() {
   console.log(`[rivano] WebUI API listening on :${WEBUI_PORT}`);
 }
 
-function watchConfig() {
+function watchConfig(): ReturnType<typeof watch> {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  watch(CONFIG_PATH, () => {
+  const watcher = watch(CONFIG_PATH, () => {
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(async () => {
       if (reloadInProgress) {
@@ -217,6 +240,7 @@ function watchConfig() {
   });
 
   console.log(`[rivano] Watching ${CONFIG_PATH} for changes`);
+  return watcher;
 }
 
 async function shutdown(signal: string) {
@@ -255,15 +279,21 @@ async function main() {
   await startProxy(state.config);
   await deployAgents(state.config);
   await startWebUI();
-  watchConfig();
+  const configWatcher = watchConfig();
 
   console.log("\n[rivano] All systems operational");
-  console.log(`[rivano] Proxy:    http://localhost:${state.config.proxy.port}`);
-  console.log(`[rivano] Observer: http://localhost:${state.config.observer.port}`);
+  console.log(`[rivano] Proxy:    http://localhost:${state.config!.proxy.port}`);
+  console.log(`[rivano] Observer: http://localhost:${state.config!.observer.port}`);
   console.log(`[rivano] WebUI:    http://localhost:${WEBUI_PORT}\n`);
 
-  process.on("SIGINT", () => shutdown("SIGINT"));
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => {
+    configWatcher.close();
+    return shutdown("SIGINT");
+  });
+  process.on("SIGTERM", () => {
+    configWatcher.close();
+    return shutdown("SIGTERM");
+  });
 }
 
 main().catch((err) => {
