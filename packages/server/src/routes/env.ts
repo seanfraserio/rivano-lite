@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { readFile, writeFile } from "fs/promises";
+import { readFile, writeFile, rename } from "fs/promises";
 import { join } from "path";
+import { DATA_DIR } from "../state.js";
 import type { ServerState } from "../state.js";
 
-const DATA_DIR = process.env.RIVANO_DATA_DIR || "/data";
 const ENV_KEY_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
 function readEnvLines(envPath: string): Promise<string[]> {
@@ -16,7 +16,6 @@ async function writeEnvLines(envPath: string, lines: string[]) {
   const content = lines.filter((l) => l.trim()).join("\n") + "\n";
   const tmpPath = envPath + ".tmp";
   await writeFile(tmpPath, content, "utf-8");
-  const { rename } = await import("fs/promises");
   await rename(tmpPath, envPath);
 }
 

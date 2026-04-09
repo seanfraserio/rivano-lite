@@ -5,13 +5,11 @@ import { deploy } from "@rivano/engine";
 import { watch } from "fs";
 import { readFile, writeFile, stat } from "fs/promises";
 import { resolve } from "path";
-import type { ServerState, LogEntry } from "./state.js";
+import { type ServerState, type LogEntry, DATA_DIR, CONFIG_PATH, DB_PATH, API_KEY, VERSION } from "./state.js";
 import { registerConfigRoutes } from "./routes/config.js";
 import { registerTraceRoutes } from "./routes/traces.js";
 import { registerEnvRoutes } from "./routes/env.js";
 import { registerSystemRoutes } from "./routes/system.js";
-
-const VERSION = "0.1.0";
 
 const BANNER = `
   ┌─────────────────────────────────────┐
@@ -20,12 +18,8 @@ const BANNER = `
   └─────────────────────────────────────┘
 `;
 
-const DATA_DIR = process.env.RIVANO_DATA_DIR || "/data";
-const CONFIG_PATH = process.env.RIVANO_CONFIG || resolve(DATA_DIR, "rivano.yaml");
-const DB_PATH = resolve(DATA_DIR, "traces.db");
 const STATE_PATH = resolve(DATA_DIR, "state.json");
 const WEBUI_PORT = parseInt(process.env.RIVANO_WEBUI_PORT || "9000", 10);
-const API_KEY = process.env.RIVANO_API_KEY;
 
 let reloadInProgress = false;
 const MAX_LOG_BUFFER = 500;

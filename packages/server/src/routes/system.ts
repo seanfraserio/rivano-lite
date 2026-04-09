@@ -1,12 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { stat } from "fs/promises";
-import { resolve } from "path";
+import { DATA_DIR, CONFIG_PATH, DB_PATH, VERSION } from "../state.js";
 import type { ServerState } from "../state.js";
 
-const DB_PATH = resolve(process.env.RIVANO_DATA_DIR || "/data", "traces.db");
-
 export function registerSystemRoutes(app: FastifyInstance, state: ServerState) {
-  const VERSION = "0.1.0";
 
   // ── Health ─────────────────────────────────────────────────
   app.get("/health", async () => ({
@@ -22,8 +19,8 @@ export function registerSystemRoutes(app: FastifyInstance, state: ServerState) {
 
   // ── Status ─────────────────────────────────────────────────
   app.get("/api/status", async () => ({
-    config: process.env.RIVANO_CONFIG || resolve(process.env.RIVANO_DATA_DIR || "/data", "rivano.yaml"),
-    dataDir: process.env.RIVANO_DATA_DIR || "/data",
+    config: CONFIG_PATH,
+    dataDir: DATA_DIR,
     version: VERSION,
     uptime: Math.floor((Date.now() - state.startedAt) / 1000),
     proxy: {

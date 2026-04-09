@@ -1,14 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { readFile, writeFile } from "fs/promises";
-import { stat } from "fs/promises";
-import { resolve, join } from "path";
+import { readFile, writeFile, rename } from "fs/promises";
 import YAML from "js-yaml";
 import { validateConfig } from "@rivano/core";
+import { CONFIG_PATH, API_KEY } from "../state.js";
 import type { ServerState } from "../state.js";
-
-const DATA_DIR = process.env.RIVANO_DATA_DIR || "/data";
-const CONFIG_PATH = process.env.RIVANO_CONFIG || resolve(DATA_DIR, "rivano.yaml");
-const API_KEY = process.env.RIVANO_API_KEY;
 
 export function sanitizeYamlObj(obj: unknown): unknown {
   if (typeof obj !== "object" || obj === null) return obj;
@@ -68,7 +63,6 @@ export function registerConfigRoutes(app: FastifyInstance, state: ServerState, r
       // Write atomically (tmp + rename)
       const tmpPath = CONFIG_PATH + ".tmp";
       await writeFile(tmpPath, yaml, "utf-8");
-      const { rename } = await import("fs/promises");
       await rename(tmpPath, CONFIG_PATH);
 
       await reload();
