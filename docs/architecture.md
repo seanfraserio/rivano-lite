@@ -228,6 +228,42 @@ The WebUI API endpoints support:
 
 All state lives in SQLite and `rivano.yaml`. The WebUI is stateless — refreshing the page loses nothing.
 
+## API Authentication
+
+When the `RIVANO_API_KEY` environment variable is set, all `/api/*` endpoints require authentication via a Bearer token:
+
+```
+Authorization: Bearer <your-api-key>
+```
+
+Requests without a valid key receive a `401 Unauthorized` response. When `RIVANO_API_KEY` is not set, all API endpoints are accessible without authentication (intended for local development only).
+
+The `/api/config/raw` endpoint always requires authentication, even when no global API key is set, because it exposes provider API keys in plaintext.
+
+In the WebUI, enter the key in **Settings → API Authentication**. The browser stores it in `localStorage` and includes it automatically with all API requests.
+
+### WebUI API Endpoints
+
+| Method | Path | Auth Required | Description |
+|--------|------|---------------|-------------|
+| `GET` | `/health` | No | Health check |
+| `GET` | `/api/status` | Yes | System status, agents, ports |
+| `GET` | `/api/config` | Yes | Config (API keys masked) |
+| `GET` | `/api/config/raw` | Yes* | Raw YAML config (plaintext keys) |
+| `PUT` | `/api/config` | Yes | Update config (YAML in body) |
+| `POST` | `/api/config/validate` | Yes | Validate config YAML |
+| `GET` | `/api/traces` | Yes | List traces (paginated) |
+| `GET` | `/api/traces/stats` | Yes | Aggregate trace statistics |
+| `DELETE` | `/api/traces` | Yes | Purge traces older than retention |
+| `GET` | `/api/traces/:id` | Yes | Single trace with spans |
+| `GET` | `/api/env` | Yes | List env vars (values masked) |
+| `PUT` | `/api/env` | Yes | Set an env var |
+| `DELETE` | `/api/env` | Yes | Remove an env var |
+| `GET` | `/api/storage` | Yes | Database size info |
+| `GET` | `/api/policy-activity` | Yes | Policy evaluation summary |
+
+*\* `/api/config/raw` requires authentication even when `RIVANO_API_KEY` is not set.*
+
 ## Why Bun?
 
 Rivano Lite uses Bun instead of Node.js for three reasons:
@@ -249,9 +285,20 @@ Rivano Lite and [Rivano Cloud](https://rivano.ai) share the same config format (
 | Process model   | Single Bun process         | Distributed microservices       |
 | Database        | SQLite (local)             | Postgres (managed)              |
 | Cache           | In-memory LRU              | Redis                           |
-| Auth / RBAC     | None (local only)          | Full RBAC with SSO              |
+| Auth / RBAC     | API key (`RIVANO_API_KEY`)  | Full RBAC with SSO              |
 | Trace retention | Limited by disk            | Configurable retention policies |
 | Scaling         | Single machine             | Horizontal auto-scaling         |
 | Agent runtime   | Local process              | Isolated container per agent    |
 
 The migration path is intentionally smooth: export your `rivano.yaml` from Lite and import it into Cloud. Provider configs, policies, and agent definitions transfer directly.
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RIVANO_API_KEY` | — | API key for WebUI authentication. When set, all `/api/*` endpoints require `Authorization: Bearer <key>`. When unset, endpoints are open (local dev only). |
+| `RIVANO_DATA_DIR` | `/data` | Base directory for persistent storage. Config, database, and state files live here. |
+| `RIVANO_CONFIG` | `<DATA_DIR>/rivano.yaml` | Path to the config file. Overrides the default location. |
+| `RIVANO_WEBUI_PORT` | `9000` | Port for the WebUI dashboard and API. |
+
+Provider API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) are typically stored in `<DATA_DIR>/.env` and referenced in `rivano.yaml` with `${ANTHROPIC_API_KEY}` interpolation.

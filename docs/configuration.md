@@ -193,7 +193,7 @@ All condition fields are optional. When multiple fields are present in a single 
 |-------|------|-------------|
 | `contains` | `string` | Matches if the text contains this exact substring. |
 | `regex` | `string` | Matches if the text matches this regular expression (JavaScript `RegExp` syntax). |
-| `injection_score` | `number` (0.0 - 1.0) | Matches if the computed prompt injection score is **greater than or equal to** this threshold. The score is derived from a weighted heuristic that checks for known injection patterns (role hijacking, instruction override, delimiter injection, etc.). |
+| `injection_score` | `number` or `object` | Matches if the computed prompt injection score meets the threshold. A number `0.8` means score ≥ 0.8. An object supports explicit operators: `{ gt: 0.7 }`, `{ gte: 0.8 }`, `{ lt: 0.3 }`, `{ lte: 0.2 }`. Default operator is `gte`. |
 | `pii_detected` | `boolean` | Matches if PII detection finds (or does not find, if `false`) personally identifiable information. Detected PII types: email, phone, SSN, credit card, IP address, AWS access key. |
 | `length_exceeds` | `number` | Matches if the text length is **strictly greater than** this value (in characters). Must be positive. |
 
@@ -261,9 +261,33 @@ OPENAI_API_KEY=sk-...
 
 ### Behavior
 
-- If a referenced variable is **not set**, config loading fails with an error naming the missing variable.
+- If a referenced variable is **not set** in the environment or `.env` file, config loading logs a warning and the `${VAR_NAME}` reference is left as-is in the config value. The application continues to work — provider connections that require the missing variable will fail at runtime.
 - Interpolation applies to the raw YAML text before parsing, so `${VAR}` works in any value position (strings, URLs, keys).
 - Variables are trimmed of surrounding whitespace before lookup.
+
+---
+
+## API Authentication
+
+Set `RIVANO_API_KEY` as an environment variable to protect all WebUI API endpoints with Bearer token authentication:
+
+```bash
+docker run -d --name rivano-lite \
+  -p 9000:9000 -p 4000:4000 -p 4100:4100 \
+  -e RIVANO_API_KEY=your-secret-key \
+  -v rivano-data:/data \
+  rivano-lite
+```
+
+When set, every `/api/*` request must include the header:
+
+```
+Authorization: Bearer your-secret-key
+```
+
+Requests without a valid key receive `401 Unauthorized`. When `RIVANO_API_KEY` is not set, all endpoints are accessible without authentication — suitable for local development only.
+
+> **Note:** The `/api/config/raw` endpoint always requires authentication, even when `RIVANO_API_KEY` is not set globally, because it exposes provider API keys in plaintext.
 
 ---
 

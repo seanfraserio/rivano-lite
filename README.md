@@ -102,6 +102,25 @@ docker run -d --name rivano-lite \
 
 Point your AI SDK at the Rivano proxy:
 
+### API Authentication
+
+When `RIVANO_API_KEY` is set, all `/api/*` endpoints require a Bearer token:
+
+```bash
+# Set the API key when starting the container
+docker run -d --name rivano-lite \
+  -p 9000:9000 -p 4000:4000 -p 4100:4100 \
+  -e RIVANO_API_KEY=your-secret-key \
+  -v rivano-data:/data \
+  rivano-lite
+```
+
+In the WebUI, enter the key in **Settings → API Authentication**. All API requests from the browser include the `Authorization: Bearer <key>` header automatically.
+
+When no API key is set, all endpoints are accessible without authentication (suitable for local development only).
+
+### Proxy Requests
+
 ```typescript
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -127,7 +146,7 @@ client = Anthropic(base_url="http://localhost:4000/v1")
 | Rate Limiting | In-memory | Distributed |
 | Tracing | Full spans + cost | + PII in traces |
 | Storage | SQLite | Managed Postgres |
-| Auth | — | OAuth, SAML, RBAC |
+| Auth | API key (`RIVANO_API_KEY`) | OAuth, SAML, RBAC |
 | Alerts | — | Slack, PagerDuty |
 | Compliance | — | SOC2, HIPAA |
 | **Price** | **Free** | **Usage-based** |

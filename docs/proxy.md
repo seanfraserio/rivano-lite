@@ -244,7 +244,7 @@ All conditions in a single policy are AND-ed together. If any condition is false
 |--------------------|-----------|--------------------------------------------------|
 | `contains`         | `string`  | True if the text includes this exact substring   |
 | `regex`            | `string`  | True if the text matches this regular expression |
-| `injection_score`  | `number`  | True if injection score >= this threshold (0-1)  |
+| `injection_score`  | `number` or `object` | Matches if injection score meets the threshold. A number `0.8` means score ≥ 0.8. Use an object for explicit comparison: `{ gt: 0.7 }`, `{ gte: 0.8 }`, `{ lt: 0.3 }`, `{ lte: 0.2 }`. |
 | `pii_detected`     | `boolean` | True if PII patterns were found in the text      |
 | `length_exceeds`   | `number`  | True if text length > this character count       |
 
@@ -392,7 +392,7 @@ The proxy includes an in-memory exact-match cache to avoid redundant provider ca
 
 ### How It Works
 
-1. On request, the cache middleware computes a key: `SHA-256(provider + model + messages)`.
+1. On request, the cache middleware computes a key: `SHA-256(provider + model + messages + temperature + max_tokens)`.
 2. If the key exists and has not expired, the cached response is returned immediately (short-circuit). The provider is never called.
 3. On response, the result is stored in the cache with the computed key.
 
@@ -407,7 +407,7 @@ proxy:
 
 ### Behavior
 
-- **Key computation:** SHA-256 hash of `JSON.stringify({ provider, model, messages })`.
+- **Key computation:** SHA-256 hash of `JSON.stringify({ provider, model, messages, temperature, max_tokens })`. Requests with different temperatures or max_tokens are cached separately.
 - **TTL:** Entries expire after `ttl` seconds from creation.
 - **Max entries:** 1000. When the cache is full, the least recently used entry is evicted (LRU).
 - **In-memory only.** Cache is lost on restart.
@@ -451,6 +451,7 @@ proxy:
 ### Behavior
 
 - **Per-caller buckets:** Each unique caller gets its own bucket, keyed by `x-api-key` header, falling back to IP address, falling back to `"global"`.
+- **Max buckets:** 10,000. When the bucket count exceeds this limit, the least recently used bucket is evicted (LRU). This prevents memory exhaustion from distinct caller keys.
 - **Token bucket:** Starts full at `burst` tokens (or `requests_per_minute` if `burst` is not set). Tokens refill at `requests_per_minute / 60` per second.
 - **When exceeded:** Returns `429` with `{"error": "Rate limit exceeded"}`.
 - **In-memory only.** Buckets reset on restart.
@@ -498,6 +499,16 @@ Example entry:
   "costUsd": 0.008148
 }
 ```
+
+---
+
+## Provider Timeouts
+
+Each provider request has a 30-second timeout. If the upstream provider (Anthropic, OpenAI, Ollama) does not respond within 30 seconds, the proxy returns `504 Gateway Timeout` to the client. The overall request has a 60-second hard deadline — if the entire proxy pipeline (including policies, caching, and the provider call) exceeds 60 seconds, the request is aborted.
+
+## DNS Resolution
+
+The proxy resolves provider hostnames through a TTL-based DNS cache (60-second TTL). This prevents DNS lookup latency on every request and protects against DNS-style SSRF attacks. Resolved addresses are checked against private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, and IPv6 equivalents). Requests to private IP addresses are rejected with `403 Forbidden`.
 
 ---
 

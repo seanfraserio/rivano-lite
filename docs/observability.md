@@ -308,7 +308,7 @@ Only spans with non-zero token counts appear in `perSpan`.
 
 Traces are stored in a SQLite database with WAL (Write-Ahead Logging) mode enabled for concurrent read/write performance.
 
-**Default location:** `./rivano-observer.db` (configurable via `DB_PATH` environment variable).
+**Default location:** `/data/traces.db` (configurable via `RIVANO_DATA_DIR` environment variable, which sets the base directory).
 
 **Schema:**
 
@@ -361,12 +361,14 @@ observer:
 
 Environment variable overrides:
 
-| Variable         | Default                  | Description              |
-|------------------|--------------------------|--------------------------|
-| `OBSERVER_PORT`  | `7778`                   | Server port              |
-| `RETENTION_DAYS` | `30`                     | Days before auto-purge   |
-| `EVALUATORS`     | `latency,cost`           | Comma-separated list     |
-| `DB_PATH`        | `./rivano-observer.db`   | SQLite database path     |
+| Variable          | Default                  | Description              |
+|-------------------|--------------------------|--------------------------|
+| `RIVANO_DATA_DIR` | `/data`                  | Base directory for all persistent data (config, database, state) |
+| `RIVANO_CONFIG`   | `<DATA_DIR>/rivano.yaml` | Path to the config file  |
+| `RIVANO_API_KEY`  | —                        | API key for WebUI authentication |
+| `RIVANO_WEBUI_PORT` | `9000`                 | Port for the WebUI dashboard |
+
+Observer settings are configured in `rivano.yaml` under the `observer` key — they cannot be overridden with separate environment variables.
 
 ---
 
