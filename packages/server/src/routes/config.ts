@@ -30,10 +30,10 @@ export function registerConfigRoutes(app: FastifyInstance, state: ServerState, r
     return masked;
   });
 
-  // ── Config read (raw) — requires API key ──────────────────
+  // ── Config read (raw) — always requires auth, even when API_KEY is not set globally ──
   app.get("/api/config/raw", async (request, reply) => {
     if (!API_KEY) {
-      return reply.status(403).send({ error: "Set RIVANO_API_KEY to access raw config" });
+      return reply.status(401).send({ error: "Set RIVANO_API_KEY environment variable to access raw config" });
     }
     try {
       const raw = await readFile(CONFIG_PATH, "utf-8");
