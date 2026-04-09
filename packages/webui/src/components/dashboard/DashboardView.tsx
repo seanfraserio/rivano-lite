@@ -37,7 +37,7 @@ export function DashboardView() {
         const [health, status, stats, policyRes] = await Promise.all([
           api.health(),
           api.status().catch((err) => {
-            if (err instanceof Error && (err.message.includes("401") || err.message.includes("API key"))) {
+            if (err instanceof Error && err.message.includes("API key")) {
               setAuthRequired(true);
             }
             return null;

@@ -2,12 +2,6 @@ import { useEffect, useState } from "react";
 import { api, type SystemStatus } from "../../lib/api";
 import { Card } from "../shared/Card";
 
-const AUTH_ERROR = "Set your API key in Settings → API Authentication to manage agents.";
-
-function isAuthError(err: unknown): boolean {
-  return err instanceof Error && (err.message.includes("401") || err.message.includes("403"));
-}
-
 interface AgentConfig {
   name: string;
   description: string;
@@ -52,37 +46,33 @@ function yamlScalar(value: string): string {
 /**
  * Merge agent changes back into raw YAML, replacing the agents section
  * while preserving everything else (providers, proxy config, API keys).
+ *
+ * Strategy: find the top-level "agents:" key and everything indented after it,
+ * then replace with the new agents list. Uses indent-level tracking so it
+ * handles comments and multi-line values correctly.
  */
 function mergeAgentsIntoYaml(rawYaml: string, agents: AgentConfig[]): string {
   const lines = rawYaml.split("\n");
   const result: string[] = [];
-  let inAgents = false;
+  let skipUntilNextTopLevel = false;
 
   for (const line of lines) {
-    // Match "agents:" as a top-level key (possibly with inline value like "agents: []")
-    const agentsHeaderMatch = line.match(/^agents\s*:\s*(.*)/);
-    if (agentsHeaderMatch && !inAgents) {
-      const inlineValue = agentsHeaderMatch[1].trim();
-      // If "agents: []" or "agents:" with no inline content, start skipping
-      if (inlineValue === "" || inlineValue === "[]") {
-        inAgents = true;
-        continue; // skip the agents: header line
-      }
-      // If "agents:" has an unexpected inline value, still skip this line
-      // because we'll replace the whole section
-      inAgents = true;
-      continue;
+    // Detect start of agents section at top level (no leading spaces)
+    if (!skipUntilNextTopLevel && /^agents\s*:/.test(line)) {
+      skipUntilNextTopLevel = true;
+      continue; // skip the "agents:" header
     }
-    if (inAgents) {
-      // Lines within the agents section are indented (start with whitespace or "- ")
-      // A non-blank, non-indented line means the agents section has ended
+
+    if (skipUntilNextTopLevel) {
+      // Continue skipping indented lines (agents content, comments, blanks)
+      // Stop when we hit a non-blank, non-indented line (next top-level key)
       if (line.trim().length > 0 && !/^\s/.test(line)) {
-        inAgents = false;
+        skipUntilNextTopLevel = false;
         result.push(line);
       }
-      // Skip all lines within the old agents section
       continue;
     }
+
     result.push(line);
   }
 
@@ -181,7 +171,7 @@ export function AgentsView() {
       setConfig(configRes);
       setError(null);
     } catch (err) {
-      setError(isAuthError(err) ? AUTH_ERROR : (err instanceof Error ? err.message : "Failed to load agents"));
+      setError(err instanceof Error ? err.message : "Failed to load agents");
     }
   }
 
@@ -291,7 +281,7 @@ export function AgentsView() {
       await api.saveConfig(mergedYaml);
       await loadData();
     } catch (err) {
-      setError(isAuthError(err) ? AUTH_ERROR : (err instanceof Error ? err.message : "Failed to remove agent"));
+      setError(err instanceof Error ? err.message : "Failed to remove agent");
     } finally {
       setSaving(false);
     }
