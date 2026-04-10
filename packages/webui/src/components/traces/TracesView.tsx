@@ -42,24 +42,20 @@ export function TracesView() {
       try {
         if (!append) setLoading(true);
 
-        const params: { limit: number; offset: number; source?: string } = {
+        const params: { limit: number; offset: number; source?: string; since?: number } = {
           limit: PAGE_SIZE,
           offset: append ? offset : 0,
         };
         if (source) params.source = source;
+        if (timeRange.ms > 0) {
+          params.since = Date.now() - timeRange.ms;
+        }
 
         const result = await api.traces(params);
 
-        // Filter by time range client-side (server may not support it)
-        let filtered = result.traces;
-        if (timeRange.ms > 0) {
-          const cutoff = Date.now() - timeRange.ms;
-          filtered = filtered.filter((t) => t.startTime >= cutoff);
-        }
-
         if (append) {
           setTraces((prev) => {
-            const merged = [...prev, ...filtered];
+            const merged = [...prev, ...result.traces];
             const uniqueSources = Array.from(
               new Set(merged.map((t) => t.source).filter(Boolean) as string[])
             );
@@ -67,9 +63,9 @@ export function TracesView() {
             return merged;
           });
         } else {
-          setTraces(filtered);
+          setTraces(result.traces);
           const uniqueSources = Array.from(
-            new Set(filtered.map((t) => t.source).filter(Boolean) as string[])
+            new Set(result.traces.map((t) => t.source).filter(Boolean) as string[])
           );
           setSources(uniqueSources);
         }
@@ -105,7 +101,7 @@ export function TracesView() {
         {/* Header */}
         <div className="px-4 py-3 border-b border-border-light flex-shrink-0">
           <div className="flex items-center justify-between">
-            <h1 className="text-sm font-semibold text-text-primary">Traces</h1>
+            <h1 className="text-base font-semibold text-text-primary">Traces</h1>
             {stats && (
               <span className="text-xs text-text-muted tabular-nums">
                 {stats.totalTraces.toLocaleString()} total
@@ -210,17 +206,17 @@ export function TracesView() {
                           {trace.id.slice(0, 8)}
                         </span>
                         {isBlocked && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-error/20 text-error font-medium">
+                          <span className="px-2 py-0.5 rounded text-xs bg-error/20 text-error font-medium">
                             blocked
                           </span>
                         )}
                         {isWarned && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-warning/20 text-warning font-medium">
+                          <span className="px-2 py-0.5 rounded text-xs bg-warning/20 text-warning font-medium">
                             warned
                           </span>
                         )}
                         {trace.source && !isBlocked && !isWarned && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-bg-hover text-text-muted truncate max-w-[80px]">
+                          <span className="px-2 py-0.5 rounded text-xs bg-bg-hover text-text-muted truncate max-w-[90px]">
                             {trace.source}
                           </span>
                         )}

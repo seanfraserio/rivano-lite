@@ -52,6 +52,8 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   return res.json();
 }
 
+import type { TraceStatus } from "@rivano/core";
+
 export interface HealthStatus {
   status: string;
   version: string;
@@ -132,11 +134,25 @@ export const api = {
       body: JSON.stringify({ yaml }),
     }),
 
-  traces: (params?: { limit?: number; offset?: number; source?: string }) => {
+  traces: (params?: {
+    limit?: number;
+    offset?: number;
+    source?: string;
+    since?: number;
+    model?: string;
+    status?: TraceStatus;
+    minCostUsd?: number;
+    maxCostUsd?: number;
+  }) => {
     const query = new URLSearchParams();
     if (params?.limit) query.set("limit", String(params.limit));
     if (params?.offset) query.set("offset", String(params.offset));
     if (params?.source) query.set("source", params.source);
+    if (params?.since) query.set("since", String(params.since));
+    if (params?.model) query.set("model", params.model);
+    if (params?.status) query.set("status", params.status);
+    if (params?.minCostUsd != null) query.set("minCostUsd", String(params.minCostUsd));
+    if (params?.maxCostUsd != null) query.set("maxCostUsd", String(params.maxCostUsd));
     return apiFetch<{ traces: TraceListItem[]; total: number }>(
       `/api/traces?${query}`
     );

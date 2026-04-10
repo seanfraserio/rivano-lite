@@ -132,7 +132,6 @@ async function reloadServices() {
     const newConfig = await loadAndValidateConfig();
     // Try to start all services before committing to new config
     // If any service fails, keep the previous config running
-    await startObserver(newConfig);
     await startProxy(newConfig);
     await deployAgents(newConfig);
     state.config = newConfig;

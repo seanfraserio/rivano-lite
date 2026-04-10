@@ -13,7 +13,7 @@ const styles: Record<string, string> = {
 export function StatusBadge({ status, label }: Props) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] || styles.unknown}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${styles[status] || styles.unknown}`}
     >
       <span
         className={`w-1.5 h-1.5 rounded-full ${status === "running" ? "bg-success animate-pulse" : status === "error" ? "bg-error" : "bg-text-muted"}`}

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { readFile, writeFile, rename } from "fs/promises";
 import YAML from "js-yaml";
-import { validateConfig } from "@rivano/core";
+import { interpolateEnvVars, validateConfig } from "@rivano/core";
 import { CONFIG_PATH, API_KEY } from "../state.js";
 import type { ServerState } from "../state.js";
 import { withLock } from "../utils/lock.js";
@@ -58,7 +58,8 @@ export function registerConfigRoutes(app: FastifyInstance, state: ServerState, r
         return reply.status(400).send({ ok: false, error: "Config too large (max 100KB)" });
       }
 
-      const parsed = sanitizeYamlObj(YAML.load(yaml, { schema: YAML.JSON_SCHEMA }));
+      const interpolated = interpolateEnvVars(yaml, { strict: true });
+      const parsed = sanitizeYamlObj(YAML.load(interpolated, { schema: YAML.JSON_SCHEMA }));
       validateConfig(parsed);
 
       return withLock(async () => {
@@ -86,7 +87,8 @@ export function registerConfigRoutes(app: FastifyInstance, state: ServerState, r
       if (!yaml || typeof yaml !== "string") {
         return reply.status(400).send({ valid: false, errors: ["Missing yaml field"] });
       }
-      const parsed = sanitizeYamlObj(YAML.load(yaml, { schema: YAML.JSON_SCHEMA }));
+      const interpolated = interpolateEnvVars(yaml, { strict: true });
+      const parsed = sanitizeYamlObj(YAML.load(interpolated, { schema: YAML.JSON_SCHEMA }));
       validateConfig(parsed);
       return { valid: true };
     } catch (err) {

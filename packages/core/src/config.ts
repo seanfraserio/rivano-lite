@@ -77,7 +77,11 @@ export const RivanoConfigSchema = z.object({
   agents: z.array(AgentConfigSchema),
 });
 
-export function interpolateEnvVars(text: string): string {
+export interface InterpolateEnvVarsOptions {
+  strict?: boolean;
+}
+
+export function interpolateEnvVars(text: string, options: InterpolateEnvVarsOptions = {}): string {
   const missing: string[] = [];
   const result = text.replace(/\$\{([^}]+)\}/g, (match, varName) => {
     const trimmed = varName.trim();
@@ -95,6 +99,10 @@ export function interpolateEnvVars(text: string): string {
       "Set these in your .env file or environment.");
   }
 
+  if (options.strict && missing.length > 0) {
+    throw new Error(`Unresolved environment variables: ${missing.join(", ")}`);
+  }
+
   return result;
 }
 
@@ -104,7 +112,7 @@ export function validateConfig(config: unknown): RivanoConfig {
 
 export async function loadConfig(path: string): Promise<RivanoConfig> {
   const raw = await readFile(path, "utf-8");
-  const interpolated = interpolateEnvVars(raw);
+  const interpolated = interpolateEnvVars(raw, { strict: true });
   const parsed = yaml.load(interpolated, { schema: yaml.JSON_SCHEMA });
   return validateConfig(parsed);
 }

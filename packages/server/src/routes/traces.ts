@@ -1,19 +1,102 @@
+import type { TraceStatus } from "@rivano/core";
 import type { FastifyInstance } from "fastify";
 import type { ServerState } from "../state.js";
+
+type TraceQuery = {
+  limit?: string;
+  offset?: string;
+  source?: string;
+  since?: string;
+  model?: string;
+  status?: TraceStatus;
+  minCostUsd?: string;
+  maxCostUsd?: string;
+};
+
+function getTraceCost(trace: {
+  totalCostUsd?: number;
+  spans: Array<{ estimatedCostUsd?: number }>;
+}): number {
+  if (typeof trace.totalCostUsd === "number") {
+    return trace.totalCostUsd;
+  }
+  return trace.spans.reduce((sum, span) => sum + (span.estimatedCostUsd ?? 0), 0);
+}
+
+function getTraceModel(trace: {
+  spans: Array<{ metadata?: Record<string, unknown> }>;
+}): string | undefined {
+  for (const span of trace.spans) {
+    const model = span.metadata?.model;
+    if (typeof model === "string" && model.length > 0) {
+      return model;
+    }
+  }
+  return undefined;
+}
+
+function getTraceStatus(trace: {
+  spans: Array<{ metadata?: Record<string, unknown> }>;
+}): TraceStatus {
+  let warned = false;
+  for (const span of trace.spans) {
+    const action = span.metadata?.action;
+    if (action === "blocked") {
+      return "blocked";
+    }
+    if (action === "warned") {
+      warned = true;
+    }
+  }
+  return warned ? "warned" : "allowed";
+}
 
 export function registerTraceRoutes(app: FastifyInstance, state: ServerState) {
   // ── List traces ────────────────────────────────────────────
   app.get<{
-    Querystring: { limit?: string; offset?: string; source?: string; since?: string };
+    Querystring: TraceQuery;
   }>("/api/traces", async (request) => {
     if (!state.storage) return { traces: [], total: 0 };
-    const { limit = "50", offset = "0", source, since } = request.query;
-    return state.storage.listTraces({
-      limit: Math.min(parseInt(limit, 10) || 50, 1000),
-      offset: Math.max(parseInt(offset, 10) || 0, 0),
+    const {
+      limit = "50",
+      offset = "0",
+      source,
+      since,
+      model,
+      status,
+      minCostUsd,
+      maxCostUsd,
+    } = request.query;
+    const parsedLimit = Math.min(parseInt(limit, 10) || 50, 1000);
+    const parsedOffset = Math.max(parseInt(offset, 10) || 0, 0);
+    const base = state.storage.listTraces({
+      limit: 5000,
+      offset: 0,
       source: source || undefined,
       since: since ? parseInt(since, 10) : undefined,
     });
+
+    const filtered = base.traces.filter((trace) => {
+      if (model && getTraceModel(trace) !== model) {
+        return false;
+      }
+      if (status && getTraceStatus(trace) !== status) {
+        return false;
+      }
+      const cost = getTraceCost(trace);
+      if (minCostUsd && cost < parseFloat(minCostUsd)) {
+        return false;
+      }
+      if (maxCostUsd && cost > parseFloat(maxCostUsd)) {
+        return false;
+      }
+      return true;
+    });
+
+    return {
+      traces: filtered.slice(parsedOffset, parsedOffset + parsedLimit),
+      total: filtered.length,
+    };
   });
 
   // ── Get single trace ────────────────────────────────────────

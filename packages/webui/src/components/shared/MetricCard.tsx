@@ -9,15 +9,15 @@ interface Props {
 export function MetricCard({ label, value, unit, trend, className = "" }: Props) {
   return (
     <div className={`bg-bg-card border border-border rounded-lg p-4 ${className}`}>
-      <p className="text-xs text-text-muted uppercase tracking-wide">{label}</p>
+      <p className="text-sm text-text-muted uppercase tracking-wide">{label}</p>
       <div className="flex items-baseline gap-1.5 mt-1">
         <span className="text-2xl font-semibold text-text-primary tabular-nums">
           {value}
         </span>
-        {unit && <span className="text-sm text-text-secondary">{unit}</span>}
+        {unit && <span className="text-base text-text-secondary">{unit}</span>}
         {trend && (
           <span
-            className={`text-xs ml-1 ${
+            className={`text-sm ml-1 ${
               trend === "up"
                 ? "text-success"
                 : trend === "down"

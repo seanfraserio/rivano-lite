@@ -1,25 +1,22 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "../../lib/api";
 import { Card } from "../shared/Card";
+import {
+  extractKeysFromYaml,
+  mergePoliciesIntoYaml,
+  mergeProvidersIntoYaml,
+  type ProxyConfigYamlPolicy,
+  type ProxyConfigYamlProvider,
+} from "./proxy-config-yaml";
 
 // --- Types ---
 
-interface Provider {
-  name: string;
+interface Provider extends ProxyConfigYamlProvider {
   type: string;
-  base_url?: string;
-  api_key?: string;
-  models?: string[];
   enabled?: boolean;
 }
 
-interface Policy {
-  name: string;
-  phase: "request" | "response";
-  condition: string;
-  action: "block" | "warn" | "redact" | "tag";
-  description?: string;
-}
+type Policy = ProxyConfigYamlPolicy;
 
 interface CacheConfig {
   enabled: boolean;
@@ -54,215 +51,19 @@ const DEFAULT_URLS: Record<string, string> = {
   bedrock: "",
 };
 
-const ACTION_STYLES: Record<string, string> = {
+const ACTION_STYLES: Record<Policy["action"], string> = {
   block: "bg-error/20 text-error",
   warn: "bg-warning/20 text-warning",
   redact: "bg-info/20 text-info",
   tag: "bg-text-muted/20 text-text-muted",
 };
 
-/**
- * Safely serialize a string as a YAML scalar value.
- */
-function yamlScalar(value: string): string {
-  const escaped = value
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\r")
-    .replace(/\t/g, "\\t");
-  return `"${escaped}"`;
-}
-
-/**
- * Splice a new providers section into existing raw YAML.
- * Replaces the `providers:` block while preserving everything else.
- */
-function mergeProvidersIntoYaml(rawYaml: string, providers: Provider[]): string {
-  const lines = rawYaml.split("\n");
-  const result: string[] = [];
-  let skipUntilNextTopLevel = false;
-
-  for (const line of lines) {
-    if (!skipUntilNextTopLevel && /^providers\s*:/.test(line)) {
-      skipUntilNextTopLevel = true;
-      continue;
-    }
-    if (skipUntilNextTopLevel) {
-      if (line.trim().length > 0 && !/^\s/.test(line)) {
-        skipUntilNextTopLevel = false;
-        result.push(line);
-      }
-      continue;
-    }
-    result.push(line);
-  }
-
-  // Remove trailing blank lines
-  while (result.length > 0 && result[result.length - 1].trim() === "") {
-    result.pop();
-  }
-
-  // Build new providers section and prepend it
-  const providerLines: string[] = [];
-  if (providers.length === 0) {
-    providerLines.push("providers: {}");
-  } else {
-    providerLines.push("providers:");
-    for (const p of providers) {
-      providerLines.push(`  ${p.name}:`);
-      if (p.api_key && !p.api_key.startsWith("****")) {
-        providerLines.push(`    api_key: ${yamlScalar(p.api_key)}`);
-      }
-      if (p.base_url) providerLines.push(`    base_url: ${yamlScalar(p.base_url)}`);
-      if (p.models?.length) {
-        providerLines.push("    models:");
-        for (const m of p.models) providerLines.push(`      - ${m}`);
-      }
-    }
-  }
-  providerLines.push("");
-
-  // Find where to insert — providers should be at the top (after version line)
-  const versionIdx = result.findIndex((l) => /^version\s*:/.test(l));
-  const insertAt = versionIdx >= 0 ? versionIdx + 1 : 0;
-  // Skip blank lines after version
-  let actualInsert = insertAt;
-  while (actualInsert < result.length && result[actualInsert].trim() === "") {
-    actualInsert++;
-  }
-
-  result.splice(actualInsert, 0, ...providerLines);
-
-  return result.join("\n") + "\n";
-}
-
-/**
- * Splice a new policies list into the proxy section of existing raw YAML.
- * Replaces the `policies:` block under `proxy:` while preserving everything else.
- */
-function mergePoliciesIntoYaml(rawYaml: string, policies: Policy[]): string {
-  const lines = rawYaml.split("\n");
-  const result: string[] = [];
-  let inProxy = false;
-  let skipPolicies = false;
-  let policiesIndent = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Track if we're inside the proxy: block
-    if (/^proxy\s*:/.test(line)) {
-      inProxy = true;
-      result.push(line);
-      continue;
-    }
-    if (inProxy && /^\S/.test(line) && line.trim().length > 0) {
-      inProxy = false;
-    }
-
-    // Find policies: under proxy:
-    if (inProxy && !skipPolicies && /^\s+policies\s*:/.test(line)) {
-      skipPolicies = true;
-      policiesIndent = line.search(/\S/);
-      // Don't push this line — we'll regenerate it
-      continue;
-    }
-
-    if (skipPolicies) {
-      // Skip lines that are more indented than the policies key, or blank
-      const trimmed = line.trim();
-      if (trimmed.length === 0) continue;
-      const indent = line.search(/\S/);
-      if (indent > policiesIndent) continue;
-      // We've hit something at the same or lower indent — stop skipping
-      skipPolicies = false;
-      // Fall through to push this line
-    }
-
-    result.push(line);
-  }
-
-  // Now insert the policies block right before the end of the proxy section
-  // Find the proxy: line and the next top-level key after it
-  let proxyLineIdx = -1;
-  let nextTopLevelAfterProxy = result.length;
-  for (let i = 0; i < result.length; i++) {
-    if (/^proxy\s*:/.test(result[i])) {
-      proxyLineIdx = i;
-    } else if (proxyLineIdx >= 0 && /^\S/.test(result[i]) && result[i].trim().length > 0) {
-      nextTopLevelAfterProxy = i;
-      break;
-    }
-  }
-
-  // Build policies YAML
-  const policyLines: string[] = [];
-  if (policies.length === 0) {
-    policyLines.push("  policies: []");
-  } else {
-    policyLines.push("  policies:");
-    for (const p of policies) {
-      policyLines.push(`    - name: ${p.name}`);
-      policyLines.push(`      on: ${p.phase}`);
-      try {
-        const cond = JSON.parse(p.condition);
-        policyLines.push("      condition:");
-        for (const [k, v] of Object.entries(cond)) {
-          if (typeof v === "object" && v !== null) {
-            policyLines.push(`        ${k}:`);
-            for (const [sk, sv] of Object.entries(v as Record<string, unknown>)) {
-              policyLines.push(`          ${sk}: ${sv}`);
-            }
-          } else {
-            policyLines.push(`        ${k}: ${v}`);
-          }
-        }
-      } catch {
-        policyLines.push(`      condition: {}`);
-      }
-      policyLines.push(`      action: ${p.action}`);
-      if (p.description) policyLines.push(`      message: ${yamlScalar(p.description)}`);
-    }
-  }
-
-  // Insert before the next top-level key after proxy
-  result.splice(nextTopLevelAfterProxy, 0, ...policyLines);
-
-  return result.join("\n");
-}
-
-/**
- * Extract real API keys from raw YAML to preserve them when saving.
- */
-function extractKeysFromYaml(rawYaml: string): Record<string, string> {
-  const keys: Record<string, string> = {};
-  const lines = rawYaml.split("\n");
-  let currentProvider = "";
-  let inProviders = false;
-
-  for (const line of lines) {
-    if (/^providers:/.test(line)) { inProviders = true; continue; }
-    if (inProviders && /^\S/.test(line)) { inProviders = false; continue; }
-    if (!inProviders) continue;
-
-    const providerMatch = line.match(/^ {2}(\w+):$/);
-    if (providerMatch) { currentProvider = providerMatch[1]; continue; }
-
-    const keyMatch = line.match(/^ {4}api_key:\s*(.+)/);
-    if (keyMatch && currentProvider) {
-      keys[currentProvider] = keyMatch[1].replace(/^["']|["']$/g, "");
-    }
-  }
-  return keys;
-}
-
 // --- Sub-components ---
 
-function ActionBadge({ action }: { action: string }) {
+function ActionBadge({ action }: { action: Policy["action"] }) {
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${ACTION_STYLES[action] || ACTION_STYLES.tag}`}
+      className={`inline-flex items-center px-2.5 py-1 rounded text-sm font-medium ${ACTION_STYLES[action] || ACTION_STYLES.tag}`}
     >
       {action}
     </span>
@@ -286,17 +87,17 @@ function ProviderCard({
           <span className="text-sm font-medium text-text-primary">
             {provider.name}
           </span>
-          <span className="text-xs text-text-muted bg-bg-hover px-1.5 py-0.5 rounded">
+          <span className="text-sm text-text-muted bg-bg-hover px-2 py-0.5 rounded">
             {provider.type}
           </span>
         </div>
-        <p className="text-xs text-text-muted font-mono">{url}</p>
+        <p className="text-sm text-text-muted font-mono">{url}</p>
         {provider.models?.length ? (
           <div className="flex gap-1 flex-wrap">
             {provider.models.map((m) => (
               <span
                 key={m}
-                className="text-[10px] text-text-secondary bg-bg-primary px-1.5 py-0.5 rounded"
+                className="text-xs text-text-secondary bg-bg-primary px-1.5 py-0.5 rounded"
               >
                 {m}
               </span>
@@ -306,7 +107,7 @@ function ProviderCard({
       </div>
       <div className="flex items-center gap-3">
         <span
-          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${
             provider.enabled !== false
               ? "bg-success/20 text-success"
               : "bg-text-muted/20 text-text-muted"
@@ -323,7 +124,7 @@ function ProviderCard({
           type="button"
           onClick={onRemove}
           disabled={removing}
-          className="px-2 py-1 bg-bg-hover border border-border text-error/80 hover:text-error text-xs rounded-md transition-colors disabled:opacity-50"
+          className="px-2.5 py-1.5 bg-bg-hover border border-border text-error/80 hover:text-error text-sm rounded-md transition-colors disabled:opacity-50"
         >
           {removing ? "..." : "Remove"}
         </button>
@@ -353,7 +154,7 @@ function AddProviderForm({
     <div className="space-y-3 pt-3 border-t border-border-light">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs text-text-muted block mb-1">Provider Type</label>
+          <label className="text-sm text-text-muted block mb-1">Provider Type</label>
           <select
             value={type}
             onChange={(e) => {
@@ -369,7 +170,7 @@ function AddProviderForm({
           </select>
         </div>
         <div>
-          <label className="text-xs text-text-muted block mb-1">Name</label>
+          <label className="text-sm text-text-muted block mb-1">Name</label>
           <input
             type="text"
             value={name}
@@ -380,7 +181,7 @@ function AddProviderForm({
         </div>
       </div>
       <div>
-        <label className="text-xs text-text-muted block mb-1">Base URL</label>
+        <label className="text-sm text-text-muted block mb-1">Base URL</label>
         <input
           type="text"
           value={baseUrl}
@@ -390,7 +191,7 @@ function AddProviderForm({
         />
       </div>
       <div>
-        <label className="text-xs text-text-muted block mb-1">API Key</label>
+        <label className="text-sm text-text-muted block mb-1">API Key</label>
         <input
           type="password"
           value={apiKey}
@@ -451,7 +252,7 @@ function AddPolicyForm({
     <div className="space-y-3 pt-3 border-t border-border-light">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs text-text-muted block mb-1">Policy Name</label>
+          <label className="text-sm text-text-muted block mb-1">Policy Name</label>
           <input
             type="text"
             value={name}
@@ -461,7 +262,7 @@ function AddPolicyForm({
           />
         </div>
         <div>
-          <label className="text-xs text-text-muted block mb-1">Phase</label>
+          <label className="text-sm text-text-muted block mb-1">Phase</label>
           <select
             value={phase}
             onChange={(e) => setPhase(e.target.value as "request" | "response")}
@@ -473,7 +274,7 @@ function AddPolicyForm({
         </div>
       </div>
       <div>
-        <label className="text-xs text-text-muted block mb-1">Condition (JSON)</label>
+        <label className="text-sm text-text-muted block mb-1">Condition (JSON)</label>
         <input
           type="text"
           value={condition}
@@ -483,7 +284,7 @@ function AddPolicyForm({
         />
       </div>
       <div>
-        <label className="text-xs text-text-muted block mb-1">Action</label>
+        <label className="text-sm text-text-muted block mb-1">Action</label>
         <select
           value={action}
           onChange={(e) => setAction(e.target.value as Policy["action"])}

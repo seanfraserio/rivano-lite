@@ -53,8 +53,8 @@ const nav = [
             <path d="M60 12 L102 90 L84 90 L60 38 Z" fill="url(#seg3)"/>
           </svg>
           <div>
-            <span class="text-sm font-semibold text-text-primary">Rivano</span>
-            <span class="text-xs text-rivano-400 ml-1">Lite</span>
+            <span class="text-base font-semibold text-text-primary">Rivano</span>
+            <span class="text-sm text-rivano-400 ml-1">Lite</span>
           </div>
         </div>
       </div>
@@ -67,7 +67,7 @@ const nav = [
             <a
               href={href}
               class:list={[
-                "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
+                "flex items-center gap-2.5 px-3 py-2 rounded-md text-base transition-colors",
                 isActive
                   ? "bg-rivano-500/15 text-rivano-300 font-medium"
                   : "text-text-secondary hover:bg-bg-hover hover:text-text-primary",
@@ -93,14 +93,14 @@ const nav = [
           href="https://rivano.ai"
           target="_blank"
           rel="noopener"
-          class="flex items-center gap-2 text-xs text-text-muted hover:text-rivano-400 transition-colors"
+          class="flex items-center gap-2 text-sm text-text-muted hover:text-rivano-400 transition-colors"
         >
           <span>Upgrade to Cloud</span>
           <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
           </svg>
         </a>
-        <p class="text-[10px] text-text-muted/50 mt-1">v{VERSION}</p>
+        <p class="text-xs text-text-muted/50 mt-1">v{VERSION}</p>
       </div>
     </aside>
 

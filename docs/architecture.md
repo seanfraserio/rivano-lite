@@ -111,6 +111,8 @@ Supported providers:
 
 The proxy normalizes all requests to and from the OpenAI-compatible format. Provider-specific translation happens at the boundary.
 
+For streaming provider responses, Rivano Lite currently buffers the full upstream stream before returning it to the client. This allows response-phase policies such as `block` and `redact` to inspect the complete payload before release, but it is not token-by-token passthrough streaming.
+
 When multiple providers are configured for the same model, the router supports:
 
 - **Priority** — First available provider wins

@@ -5,6 +5,8 @@ export type PolicyAction = "block" | "warn" | "redact" | "tag";
 /** Past-tense version of PolicyAction for audit entries describing completed actions */
 export type AuditAction = "allowed" | "blocked" | "redacted" | "warned";
 
+export type TraceStatus = "allowed" | "warned" | "blocked";
+
 export interface PolicyCondition {
   contains?: string;
   regex?: string;
