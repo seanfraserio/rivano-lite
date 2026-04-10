@@ -255,7 +255,7 @@ function ProviderCard({ provider, onRemove }: { provider: Provider; onRemove: ()
         <button
           type="button"
           onClick={onRemove}
-          className="opacity-0 group-hover:opacity-100 px-2 py-1 text-error/60 hover:text-error text-xs rounded-md transition-all"
+          className="px-2 py-1 text-error/60 hover:text-error text-xs rounded-md transition-colors"
           title={`Remove ${provider.name}`}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -599,7 +599,7 @@ function VisualMode({
                             policies: config.policies?.filter((pol) => pol.name !== p.name),
                           })
                         }
-                        className="opacity-0 group-hover:opacity-100 p-1 text-error/60 hover:text-error rounded transition-all"
+                        className="p-1 text-error/60 hover:text-error rounded transition-colors"
                         title={`Remove ${p.name}`}
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
