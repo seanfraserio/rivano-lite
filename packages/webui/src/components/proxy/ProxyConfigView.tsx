@@ -251,18 +251,7 @@ function ProviderCard({ provider, onRemove }: { provider: Provider; onRemove: ()
           </div>
         ) : null}
       </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onRemove}
-          className="px-2 py-1 text-error/60 hover:text-error text-xs rounded-md transition-colors"
-          title={`Remove ${provider.name}`}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+      <div className="flex items-center gap-3">
         <span
           className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
             provider.enabled !== false
@@ -277,6 +266,13 @@ function ProviderCard({ provider, onRemove }: { provider: Provider; onRemove: ()
           />
           {provider.enabled !== false ? "active" : "disabled"}
         </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="px-2 py-1 bg-bg-hover border border-border text-error/80 hover:text-error text-xs rounded-md transition-colors"
+        >
+          Remove
+        </button>
       </div>
     </div>
   );
@@ -590,7 +586,7 @@ function VisualMode({
                     <td className="py-2.5">
                       <ActionBadge action={p.action} />
                     </td>
-                    <td className="py-2.5">
+                    <td className="py-2.5 text-right">
                       <button
                         type="button"
                         onClick={() =>
@@ -599,13 +595,9 @@ function VisualMode({
                             policies: config.policies?.filter((pol) => pol.name !== p.name),
                           })
                         }
-                        className="p-1 text-error/60 hover:text-error rounded transition-colors"
-                        title={`Remove ${p.name}`}
+                        className="px-2 py-0.5 bg-bg-hover border border-border text-error/80 hover:text-error text-xs rounded-md transition-colors"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
+                        Remove
                       </button>
                     </td>
                   </tr>
