@@ -224,10 +224,10 @@ function ActionBadge({ action }: { action: string }) {
   );
 }
 
-function ProviderCard({ provider }: { provider: Provider }) {
+function ProviderCard({ provider, onRemove }: { provider: Provider; onRemove: () => void }) {
   const url = provider.base_url || DEFAULT_URLS[provider.type] || "custom";
   return (
-    <div className="flex items-center justify-between py-3 border-b border-border-light last:border-0">
+    <div className="flex items-center justify-between py-3 border-b border-border-light last:border-0 group">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-text-primary">
@@ -251,20 +251,33 @@ function ProviderCard({ provider }: { provider: Provider }) {
           </div>
         ) : null}
       </div>
-      <span
-        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-          provider.enabled !== false
-            ? "bg-success/20 text-success"
-            : "bg-text-muted/20 text-text-muted"
-        }`}
-      >
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onRemove}
+          className="opacity-0 group-hover:opacity-100 px-2 py-1 text-error/60 hover:text-error text-xs rounded-md transition-all"
+          title={`Remove ${provider.name}`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
         <span
-          className={`w-1.5 h-1.5 rounded-full ${
-            provider.enabled !== false ? "bg-success" : "bg-text-muted"
+          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
+            provider.enabled !== false
+              ? "bg-success/20 text-success"
+              : "bg-text-muted/20 text-text-muted"
           }`}
-        />
-        {provider.enabled !== false ? "active" : "disabled"}
-      </span>
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              provider.enabled !== false ? "bg-success" : "bg-text-muted"
+            }`}
+          />
+          {provider.enabled !== false ? "active" : "disabled"}
+        </span>
+      </div>
     </div>
   );
 }
@@ -503,7 +516,16 @@ function VisualMode({
         {config.providers?.length ? (
           <div>
             {config.providers.map((p) => (
-              <ProviderCard key={p.name} provider={p} />
+              <ProviderCard
+                key={p.name}
+                provider={p}
+                onRemove={() =>
+                  onChange({
+                    ...config,
+                    providers: config.providers?.filter((pr) => pr.name !== p.name),
+                  })
+                }
+              />
             ))}
           </div>
         ) : (
@@ -549,13 +571,14 @@ function VisualMode({
                   <th className="pb-2 font-medium">Phase</th>
                   <th className="pb-2 font-medium">Condition</th>
                   <th className="pb-2 font-medium">Action</th>
+                  <th className="pb-2 font-medium w-8"></th>
                 </tr>
               </thead>
               <tbody>
                 {config.policies.map((p) => (
                   <tr
                     key={p.name}
-                    className="border-b border-border-light last:border-0"
+                    className="border-b border-border-light last:border-0 group"
                   >
                     <td className="py-2.5 text-text-primary font-medium">
                       {p.name}
@@ -566,6 +589,24 @@ function VisualMode({
                     </td>
                     <td className="py-2.5">
                       <ActionBadge action={p.action} />
+                    </td>
+                    <td className="py-2.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onChange({
+                            ...config,
+                            policies: config.policies?.filter((pol) => pol.name !== p.name),
+                          })
+                        }
+                        className="opacity-0 group-hover:opacity-100 p-1 text-error/60 hover:text-error rounded transition-all"
+                        title={`Remove ${p.name}`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
                     </td>
                   </tr>
                 ))}
