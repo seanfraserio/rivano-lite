@@ -31,22 +31,11 @@ interface RateLimitConfig {
   burst: number;
 }
 
-/** Non-visual config fields preserved from original load */
-interface PreservedConfig {
-  proxyPort: number;
-  defaultProvider: string;
-  observerPort: number;
-  observerRetentionDays: number;
-  evaluators: string[];
-  agents: unknown[];
-}
-
 interface ProxyConfig {
   providers?: Provider[];
   policies?: Policy[];
   cache?: CacheConfig;
   rate_limit?: RateLimitConfig;
-  _preserved?: PreservedConfig;
 }
 
 type Mode = "visual" | "yaml";
@@ -73,8 +62,178 @@ const ACTION_STYLES: Record<string, string> = {
 };
 
 /**
- * Extract provider API keys from raw YAML on disk (simple line parser).
- * Returns { providerName: "real-key-value" } for providers that have api_key set.
+ * Safely serialize a string as a YAML scalar value.
+ */
+function yamlScalar(value: string): string {
+  const escaped = value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t");
+  return `"${escaped}"`;
+}
+
+/**
+ * Splice a new providers section into existing raw YAML.
+ * Replaces the `providers:` block while preserving everything else.
+ */
+function mergeProvidersIntoYaml(rawYaml: string, providers: Provider[]): string {
+  const lines = rawYaml.split("\n");
+  const result: string[] = [];
+  let skipUntilNextTopLevel = false;
+
+  for (const line of lines) {
+    if (!skipUntilNextTopLevel && /^providers\s*:/.test(line)) {
+      skipUntilNextTopLevel = true;
+      continue;
+    }
+    if (skipUntilNextTopLevel) {
+      if (line.trim().length > 0 && !/^\s/.test(line)) {
+        skipUntilNextTopLevel = false;
+        result.push(line);
+      }
+      continue;
+    }
+    result.push(line);
+  }
+
+  // Remove trailing blank lines
+  while (result.length > 0 && result[result.length - 1].trim() === "") {
+    result.pop();
+  }
+
+  // Build new providers section and prepend it
+  const providerLines: string[] = [];
+  if (providers.length === 0) {
+    providerLines.push("providers: {}");
+  } else {
+    providerLines.push("providers:");
+    for (const p of providers) {
+      providerLines.push(`  ${p.name}:`);
+      if (p.api_key && !p.api_key.startsWith("****")) {
+        providerLines.push(`    api_key: ${yamlScalar(p.api_key)}`);
+      }
+      if (p.base_url) providerLines.push(`    base_url: ${yamlScalar(p.base_url)}`);
+      if (p.models?.length) {
+        providerLines.push("    models:");
+        for (const m of p.models) providerLines.push(`      - ${m}`);
+      }
+    }
+  }
+  providerLines.push("");
+
+  // Find where to insert — providers should be at the top (after version line)
+  const versionIdx = result.findIndex((l) => /^version\s*:/.test(l));
+  const insertAt = versionIdx >= 0 ? versionIdx + 1 : 0;
+  // Skip blank lines after version
+  let actualInsert = insertAt;
+  while (actualInsert < result.length && result[actualInsert].trim() === "") {
+    actualInsert++;
+  }
+
+  result.splice(actualInsert, 0, ...providerLines);
+
+  return result.join("\n") + "\n";
+}
+
+/**
+ * Splice a new policies list into the proxy section of existing raw YAML.
+ * Replaces the `policies:` block under `proxy:` while preserving everything else.
+ */
+function mergePoliciesIntoYaml(rawYaml: string, policies: Policy[]): string {
+  const lines = rawYaml.split("\n");
+  const result: string[] = [];
+  let inProxy = false;
+  let skipPolicies = false;
+  let policiesIndent = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Track if we're inside the proxy: block
+    if (/^proxy\s*:/.test(line)) {
+      inProxy = true;
+      result.push(line);
+      continue;
+    }
+    if (inProxy && /^\S/.test(line) && line.trim().length > 0) {
+      inProxy = false;
+    }
+
+    // Find policies: under proxy:
+    if (inProxy && !skipPolicies && /^\s+policies\s*:/.test(line)) {
+      skipPolicies = true;
+      policiesIndent = line.search(/\S/);
+      // Don't push this line — we'll regenerate it
+      continue;
+    }
+
+    if (skipPolicies) {
+      // Skip lines that are more indented than the policies key, or blank
+      const trimmed = line.trim();
+      if (trimmed.length === 0) continue;
+      const indent = line.search(/\S/);
+      if (indent > policiesIndent) continue;
+      // We've hit something at the same or lower indent — stop skipping
+      skipPolicies = false;
+      // Fall through to push this line
+    }
+
+    result.push(line);
+  }
+
+  // Now insert the policies block right before the end of the proxy section
+  // Find the proxy: line and the next top-level key after it
+  let proxyLineIdx = -1;
+  let nextTopLevelAfterProxy = result.length;
+  for (let i = 0; i < result.length; i++) {
+    if (/^proxy\s*:/.test(result[i])) {
+      proxyLineIdx = i;
+    } else if (proxyLineIdx >= 0 && /^\S/.test(result[i]) && result[i].trim().length > 0) {
+      nextTopLevelAfterProxy = i;
+      break;
+    }
+  }
+
+  // Build policies YAML
+  const policyLines: string[] = [];
+  if (policies.length === 0) {
+    policyLines.push("  policies: []");
+  } else {
+    policyLines.push("  policies:");
+    for (const p of policies) {
+      policyLines.push(`    - name: ${p.name}`);
+      policyLines.push(`      on: ${p.phase}`);
+      try {
+        const cond = JSON.parse(p.condition);
+        policyLines.push("      condition:");
+        for (const [k, v] of Object.entries(cond)) {
+          if (typeof v === "object" && v !== null) {
+            policyLines.push(`        ${k}:`);
+            for (const [sk, sv] of Object.entries(v as Record<string, unknown>)) {
+              policyLines.push(`          ${sk}: ${sv}`);
+            }
+          } else {
+            policyLines.push(`        ${k}: ${v}`);
+          }
+        }
+      } catch {
+        policyLines.push(`      condition: {}`);
+      }
+      policyLines.push(`      action: ${p.action}`);
+      if (p.description) policyLines.push(`      message: ${yamlScalar(p.description)}`);
+    }
+  }
+
+  // Insert before the next top-level key after proxy
+  result.splice(nextTopLevelAfterProxy, 0, ...policyLines);
+
+  return result.join("\n");
+}
+
+/**
+ * Extract real API keys from raw YAML to preserve them when saving.
  */
 function extractKeysFromYaml(rawYaml: string): Record<string, string> {
   const keys: Record<string, string> = {};
@@ -98,120 +257,6 @@ function extractKeysFromYaml(rawYaml: string): Record<string, string> {
   return keys;
 }
 
-/**
- * Merge visual-mode changes into the raw YAML, preserving API keys
- * that are masked in the UI but present in the file.
- */
-function mergeVisualIntoYaml(rawYaml: string, config: ProxyConfig): string {
-  const realKeys = extractKeysFromYaml(rawYaml);
-
-  const merged: ProxyConfig = {
-    ...config,
-    providers: config.providers?.map((p) => {
-      if (p.api_key?.startsWith("****") && realKeys[p.name]) {
-        return { ...p, api_key: realKeys[p.name] };
-      }
-      return p;
-    }),
-  };
-
-  return configToRivanoYaml(merged);
-}
-
-function configToRivanoYaml(config: ProxyConfig): string {
-  const p = config._preserved;
-  const lines: string[] = ['version: "1"', ""];
-
-  // Providers (object format, not array)
-  lines.push("providers:");
-  if (config.providers?.length) {
-    for (const prov of config.providers) {
-      lines.push(`  ${prov.name}:`);
-      if (prov.api_key && !prov.api_key.startsWith("****")) {
-        lines.push(`    api_key: "${prov.api_key}"`);
-      }
-      if (prov.base_url) lines.push(`    base_url: "${prov.base_url}"`);
-      if (prov.models?.length) {
-        lines.push("    models:");
-        for (const m of prov.models) lines.push(`      - ${m}`);
-      }
-    }
-  } else {
-    lines.push("  {}");
-  }
-
-  // Proxy — preserve port and default_provider from original config
-  lines.push("");
-  lines.push("proxy:");
-  lines.push(`  port: ${p?.proxyPort ?? 4000}`);
-  lines.push(`  default_provider: ${p?.defaultProvider ?? config.providers?.[0]?.name ?? "anthropic"}`);
-  lines.push("  cache:");
-  lines.push(`    enabled: ${config.cache?.enabled ?? false}`);
-  lines.push(`    ttl: ${config.cache?.ttl_seconds ?? 3600}`);
-  lines.push("  rate_limit:");
-  lines.push(`    requests_per_minute: ${config.rate_limit?.requests_per_minute ?? 60}`);
-  if (config.rate_limit?.burst) {
-    lines.push(`    burst: ${config.rate_limit.burst}`);
-  }
-
-  // Policies
-  if (config.policies?.length) {
-    lines.push("  policies:");
-    for (const pol of config.policies) {
-      lines.push(`    - name: ${pol.name}`);
-      lines.push(`      on: ${pol.phase}`);
-      try {
-        const cond = JSON.parse(pol.condition);
-        lines.push("      condition:");
-        for (const [k, v] of Object.entries(cond)) {
-          lines.push(`        ${k}: ${v}`);
-        }
-      } catch {
-        lines.push(`      condition: {}`);
-      }
-      lines.push(`      action: ${pol.action}`);
-      if (pol.description) lines.push(`      message: "${pol.description}"`);
-    }
-  } else {
-    lines.push("  policies: []");
-  }
-
-  // Observer — preserve from original config
-  lines.push("");
-  lines.push("observer:");
-  lines.push(`  port: ${p?.observerPort ?? 4100}`);
-  lines.push("  storage: sqlite");
-  lines.push(`  retention_days: ${p?.observerRetentionDays ?? 30}`);
-  lines.push("  evaluators:");
-  for (const ev of (p?.evaluators ?? ["latency", "cost"])) {
-    lines.push(`    - ${ev}`);
-  }
-
-  // Agents — preserve from original config
-  lines.push("");
-  if (p?.agents?.length) {
-    lines.push("agents:");
-    // Re-serialize agents as YAML
-    for (const agent of p.agents as Array<Record<string, unknown>>) {
-      lines.push(`  - name: ${agent.name}`);
-      if (agent.description) lines.push(`    description: "${agent.description}"`);
-      if (agent.model) {
-        const model = agent.model as Record<string, unknown>;
-        lines.push("    model:");
-        lines.push(`      provider: ${model.provider}`);
-        lines.push(`      name: ${model.name}`);
-        if (model.temperature != null) lines.push(`      temperature: ${model.temperature}`);
-        if (model.max_tokens != null) lines.push(`      max_tokens: ${model.max_tokens}`);
-      }
-      if (agent.system_prompt) lines.push(`    system_prompt: "${agent.system_prompt}"`);
-    }
-  } else {
-    lines.push("agents: []");
-  }
-
-  return lines.join("\n") + "\n";
-}
-
 // --- Sub-components ---
 
 function ActionBadge({ action }: { action: string }) {
@@ -224,10 +269,18 @@ function ActionBadge({ action }: { action: string }) {
   );
 }
 
-function ProviderCard({ provider, onRemove }: { provider: Provider; onRemove: () => void }) {
+function ProviderCard({
+  provider,
+  onRemove,
+  removing,
+}: {
+  provider: Provider;
+  onRemove: () => void;
+  removing: boolean;
+}) {
   const url = provider.base_url || DEFAULT_URLS[provider.type] || "custom";
   return (
-    <div className="flex items-center justify-between py-3 border-b border-border-light last:border-0 group">
+    <div className="flex items-center justify-between py-3 border-b border-border-light last:border-0">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-text-primary">
@@ -269,9 +322,10 @@ function ProviderCard({ provider, onRemove }: { provider: Provider; onRemove: ()
         <button
           type="button"
           onClick={onRemove}
-          className="px-2 py-1 bg-bg-hover border border-border text-error/80 hover:text-error text-xs rounded-md transition-colors"
+          disabled={removing}
+          className="px-2 py-1 bg-bg-hover border border-border text-error/80 hover:text-error text-xs rounded-md transition-colors disabled:opacity-50"
         >
-          Remove
+          {removing ? "..." : "Remove"}
         </button>
       </div>
     </div>
@@ -281,9 +335,11 @@ function ProviderCard({ provider, onRemove }: { provider: Provider; onRemove: ()
 function AddProviderForm({
   onAdd,
   onCancel,
+  saving,
 }: {
   onAdd: (p: Provider) => void;
   onCancel: () => void;
+  saving: boolean;
 }) {
   const [type, setType] = useState("anthropic");
   const [name, setName] = useState("");
@@ -347,12 +403,14 @@ function AddProviderForm({
         <button
           type="button"
           onClick={onCancel}
+          disabled={saving}
           className="px-3 py-1.5 bg-bg-hover border border-border text-text-secondary text-sm rounded-md hover:text-text-primary transition-colors"
         >
           Cancel
         </button>
         <button
           type="button"
+          disabled={saving || !name.trim()}
           onClick={() => {
             if (!name.trim()) return;
             onAdd({
@@ -363,9 +421,9 @@ function AddProviderForm({
               enabled: true,
             });
           }}
-          className="px-3 py-1.5 bg-rivano-500 hover:bg-rivano-600 text-white text-sm rounded-md transition-colors"
+          className="px-3 py-1.5 bg-rivano-500 hover:bg-rivano-600 text-white text-sm rounded-md transition-colors disabled:opacity-50"
         >
-          Add Provider
+          {saving ? "Saving..." : "Add Provider"}
         </button>
       </div>
     </div>
@@ -375,9 +433,11 @@ function AddProviderForm({
 function AddPolicyForm({
   onAdd,
   onCancel,
+  saving,
 }: {
   onAdd: (p: Policy) => void;
   onCancel: () => void;
+  saving: boolean;
 }) {
   const [name, setName] = useState("");
   const [phase, setPhase] = useState<"request" | "response">("request");
@@ -413,12 +473,12 @@ function AddPolicyForm({
         </div>
       </div>
       <div>
-        <label className="text-xs text-text-muted block mb-1">Condition</label>
+        <label className="text-xs text-text-muted block mb-1">Condition (JSON)</label>
         <input
           type="text"
           value={condition}
           onChange={(e) => setCondition(e.target.value)}
-          placeholder='e.g. body contains "SSN"'
+          placeholder='{"contains": "SSN"}'
           className={inputCls}
         />
       </div>
@@ -439,19 +499,21 @@ function AddPolicyForm({
         <button
           type="button"
           onClick={onCancel}
+          disabled={saving}
           className="px-3 py-1.5 bg-bg-hover border border-border text-text-secondary text-sm rounded-md hover:text-text-primary transition-colors"
         >
           Cancel
         </button>
         <button
           type="button"
+          disabled={saving || !name.trim() || !condition.trim()}
           onClick={() => {
             if (!name.trim() || !condition.trim()) return;
             onAdd({ name: name.trim(), phase, condition: condition.trim(), action });
           }}
-          className="px-3 py-1.5 bg-rivano-500 hover:bg-rivano-600 text-white text-sm rounded-md transition-colors"
+          className="px-3 py-1.5 bg-rivano-500 hover:bg-rivano-600 text-white text-sm rounded-md transition-colors disabled:opacity-50"
         >
-          Add Policy
+          {saving ? "Saving..." : "Add Policy"}
         </button>
       </div>
     </div>
@@ -484,10 +546,22 @@ function ToastMessage({ toast, onDismiss }: { toast: Toast; onDismiss: () => voi
 
 function VisualMode({
   config,
-  onChange,
+  onCacheChange,
+  onRateLimitChange,
+  onAddProvider,
+  onRemoveProvider,
+  onAddPolicy,
+  onRemovePolicy,
+  saving,
 }: {
   config: ProxyConfig;
-  onChange: (c: ProxyConfig) => void;
+  onCacheChange: (c: CacheConfig) => void;
+  onRateLimitChange: (r: RateLimitConfig) => void;
+  onAddProvider: (p: Provider) => void;
+  onRemoveProvider: (name: string) => void;
+  onAddPolicy: (p: Policy) => void;
+  onRemovePolicy: (name: string) => void;
+  saving: boolean;
 }) {
   const [showAddProvider, setShowAddProvider] = useState(false);
   const [showAddPolicy, setShowAddPolicy] = useState(false);
@@ -515,12 +589,8 @@ function VisualMode({
               <ProviderCard
                 key={p.name}
                 provider={p}
-                onRemove={() =>
-                  onChange({
-                    ...config,
-                    providers: config.providers?.filter((pr) => pr.name !== p.name),
-                  })
-                }
+                removing={saving}
+                onRemove={() => onRemoveProvider(p.name)}
               />
             ))}
           </div>
@@ -531,11 +601,9 @@ function VisualMode({
         )}
         {showAddProvider && (
           <AddProviderForm
+            saving={saving}
             onAdd={(p) => {
-              onChange({
-                ...config,
-                providers: [...(config.providers || []), p],
-              });
+              onAddProvider(p);
               setShowAddProvider(false);
             }}
             onCancel={() => setShowAddProvider(false)}
@@ -567,14 +635,14 @@ function VisualMode({
                   <th className="pb-2 font-medium">Phase</th>
                   <th className="pb-2 font-medium">Condition</th>
                   <th className="pb-2 font-medium">Action</th>
-                  <th className="pb-2 font-medium w-8"></th>
+                  <th className="pb-2 font-medium w-20"></th>
                 </tr>
               </thead>
               <tbody>
                 {config.policies.map((p) => (
                   <tr
                     key={p.name}
-                    className="border-b border-border-light last:border-0 group"
+                    className="border-b border-border-light last:border-0"
                   >
                     <td className="py-2.5 text-text-primary font-medium">
                       {p.name}
@@ -589,15 +657,11 @@ function VisualMode({
                     <td className="py-2.5 text-right">
                       <button
                         type="button"
-                        onClick={() =>
-                          onChange({
-                            ...config,
-                            policies: config.policies?.filter((pol) => pol.name !== p.name),
-                          })
-                        }
-                        className="px-2 py-0.5 bg-bg-hover border border-border text-error/80 hover:text-error text-xs rounded-md transition-colors"
+                        disabled={saving}
+                        onClick={() => onRemovePolicy(p.name)}
+                        className="px-2 py-0.5 bg-bg-hover border border-border text-error/80 hover:text-error text-xs rounded-md transition-colors disabled:opacity-50"
                       >
-                        Remove
+                        {saving ? "..." : "Remove"}
                       </button>
                     </td>
                   </tr>
@@ -612,11 +676,9 @@ function VisualMode({
         )}
         {showAddPolicy && (
           <AddPolicyForm
+            saving={saving}
             onAdd={(p) => {
-              onChange({
-                ...config,
-                policies: [...(config.policies || []), p],
-              });
+              onAddPolicy(p);
               setShowAddPolicy(false);
             }}
             onCancel={() => setShowAddPolicy(false)}
@@ -633,12 +695,9 @@ function VisualMode({
               <button
                 type="button"
                 onClick={() =>
-                  onChange({
-                    ...config,
-                    cache: {
-                      ...(config.cache || { enabled: false, ttl_seconds: 300 }),
-                      enabled: !config.cache?.enabled,
-                    },
+                  onCacheChange({
+                    ...(config.cache || { enabled: false, ttl_seconds: 300 }),
+                    enabled: !config.cache?.enabled,
                   })
                 }
                 className={`relative w-9 h-5 rounded-full transition-colors ${
@@ -662,12 +721,9 @@ function VisualMode({
                 type="number"
                 value={config.cache?.ttl_seconds ?? 300}
                 onChange={(e) =>
-                  onChange({
-                    ...config,
-                    cache: {
-                      enabled: config.cache?.enabled ?? false,
-                      ttl_seconds: parseInt(e.target.value) || 0,
-                    },
+                  onCacheChange({
+                    enabled: config.cache?.enabled ?? false,
+                    ttl_seconds: parseInt(e.target.value) || 0,
                   })
                 }
                 className="w-full bg-bg-primary border border-border rounded-md px-3 py-1.5 text-sm text-text-primary focus:outline-none focus:border-rivano-500"
@@ -686,12 +742,9 @@ function VisualMode({
                 type="number"
                 value={config.rate_limit?.requests_per_minute ?? 60}
                 onChange={(e) =>
-                  onChange({
-                    ...config,
-                    rate_limit: {
-                      requests_per_minute: parseInt(e.target.value) || 0,
-                      burst: config.rate_limit?.burst ?? 10,
-                    },
+                  onRateLimitChange({
+                    requests_per_minute: parseInt(e.target.value) || 0,
+                    burst: config.rate_limit?.burst ?? 10,
                   })
                 }
                 className="w-full bg-bg-primary border border-border rounded-md px-3 py-1.5 text-sm text-text-primary focus:outline-none focus:border-rivano-500"
@@ -703,13 +756,10 @@ function VisualMode({
                 type="number"
                 value={config.rate_limit?.burst ?? 10}
                 onChange={(e) =>
-                  onChange({
-                    ...config,
-                    rate_limit: {
-                      requests_per_minute:
-                        config.rate_limit?.requests_per_minute ?? 60,
-                      burst: parseInt(e.target.value) || 0,
-                    },
+                  onRateLimitChange({
+                    requests_per_minute:
+                      config.rate_limit?.requests_per_minute ?? 60,
+                    burst: parseInt(e.target.value) || 0,
                   })
                 }
                 className="w-full bg-bg-primary border border-border rounded-md px-3 py-1.5 text-sm text-text-primary focus:outline-none focus:border-rivano-500"
@@ -796,9 +846,6 @@ export function ProxyConfigView() {
     const cache = proxy.cache as Record<string, unknown> | undefined;
     const rateLimit = proxy.rate_limit as Record<string, unknown> | undefined;
 
-    const observer = (data.observer ?? {}) as Record<string, unknown>;
-    const agents = (data.agents ?? []) as unknown[];
-
     return {
       providers,
       policies,
@@ -810,55 +857,241 @@ export function ProxyConfigView() {
         requests_per_minute: (rateLimit.requests_per_minute as number) ?? 60,
         burst: (rateLimit.burst as number) ?? 10,
       } : { requests_per_minute: 60, burst: 10 },
-      _preserved: {
-        proxyPort: (proxy.port as number) ?? 4000,
-        defaultProvider: (proxy.default_provider as string) ?? "anthropic",
-        observerPort: (observer.port as number) ?? 4100,
-        observerRetentionDays: (observer.retention_days as number) ?? 30,
-        evaluators: (observer.evaluators as string[]) ?? ["latency", "cost"],
-        agents,
-      },
     };
   }
 
-  // Load config on mount — use raw YAML to preserve API keys
-  useEffect(() => {
-    async function load() {
-      try {
-        const { yaml: rawYaml } = await api.configRaw();
-        setYaml(rawYaml);
-        // Also parse for visual mode
-        const data = await api.config();
-        const parsed = transformApiConfig(data);
-        setConfig(parsed);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load config");
-      } finally {
-        setLoading(false);
-      }
+  async function loadData() {
+    try {
+      const [rawRes, configRes] = await Promise.all([
+        api.configRaw().catch(() => null),
+        api.config(),
+      ]);
+      if (rawRes) setYaml(rawRes.yaml);
+      setConfig(transformApiConfig(configRes));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load config");
+    } finally {
+      setLoading(false);
     }
-    load();
-  }, []);
+  }
 
-  // Sync visual -> yaml when switching modes
+  useEffect(() => { loadData(); }, []);
+
+  // ── Immediate-save CRUD operations (same pattern as AgentsView) ──
+
+  async function addProvider(provider: Provider) {
+    setSaving(true);
+    try {
+      const { yaml: rawYaml } = await api.configRaw();
+      // Preserve existing real keys, add new provider
+      const existingKeys = extractKeysFromYaml(rawYaml);
+      const allProviders = [
+        ...(config.providers || []).map((p) => {
+          // Restore real keys for masked providers
+          if (p.api_key?.startsWith("****") && existingKeys[p.name]) {
+            return { ...p, api_key: existingKeys[p.name] };
+          }
+          return p;
+        }),
+        provider,
+      ];
+      const merged = mergeProvidersIntoYaml(rawYaml, allProviders);
+      const validation = await api.validateConfig(merged);
+      if (!validation.valid) {
+        showToast(`Validation error: ${validation.errors?.join(", ") ?? "unknown"}`, "error");
+        return;
+      }
+      await api.saveConfig(merged);
+      await loadData();
+      showToast(`Provider "${provider.name}" added`, "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to add provider", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeProvider(name: string) {
+    setSaving(true);
+    try {
+      const { yaml: rawYaml } = await api.configRaw();
+      const existingKeys = extractKeysFromYaml(rawYaml);
+      const remaining = (config.providers || [])
+        .filter((p) => p.name !== name)
+        .map((p) => {
+          if (p.api_key?.startsWith("****") && existingKeys[p.name]) {
+            return { ...p, api_key: existingKeys[p.name] };
+          }
+          return p;
+        });
+      const merged = mergeProvidersIntoYaml(rawYaml, remaining);
+      const validation = await api.validateConfig(merged);
+      if (!validation.valid) {
+        showToast(`Validation error: ${validation.errors?.join(", ") ?? "unknown"}`, "error");
+        return;
+      }
+      await api.saveConfig(merged);
+      await loadData();
+      showToast(`Provider "${name}" removed`, "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to remove provider", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addPolicy(policy: Policy) {
+    setSaving(true);
+    try {
+      const { yaml: rawYaml } = await api.configRaw();
+      const allPolicies = [...(config.policies || []), policy];
+      const merged = mergePoliciesIntoYaml(rawYaml, allPolicies);
+      const validation = await api.validateConfig(merged);
+      if (!validation.valid) {
+        showToast(`Validation error: ${validation.errors?.join(", ") ?? "unknown"}`, "error");
+        return;
+      }
+      await api.saveConfig(merged);
+      await loadData();
+      showToast(`Policy "${policy.name}" added`, "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to add policy", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removePolicy(name: string) {
+    setSaving(true);
+    try {
+      const { yaml: rawYaml } = await api.configRaw();
+      const remaining = (config.policies || []).filter((p) => p.name !== name);
+      const merged = mergePoliciesIntoYaml(rawYaml, remaining);
+      const validation = await api.validateConfig(merged);
+      if (!validation.valid) {
+        showToast(`Validation error: ${validation.errors?.join(", ") ?? "unknown"}`, "error");
+        return;
+      }
+      await api.saveConfig(merged);
+      await loadData();
+      showToast(`Policy "${name}" removed`, "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to remove policy", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ── Mode switching ──
+
   async function switchMode(next: Mode) {
     if (next === "yaml" && mode === "visual") {
-      // Try to load current raw YAML from server, fall back to generated
       try {
-        const raw = await fetch("/api/config/raw").then((r) => r.json());
-        setYaml(raw.yaml || configToRivanoYaml(config));
+        const raw = await api.configRaw();
+        setYaml(raw.yaml);
       } catch {
-        setYaml(configToRivanoYaml(config));
+        // fall through with current yaml
       }
     }
     setMode(next);
   }
 
+  // ── YAML mode + cache/rate-limit Apply ──
+
+  async function handleApply() {
+    setSaving(true);
+    try {
+      if (mode === "yaml") {
+        await api.saveConfig(yaml);
+        await loadData();
+        showToast("Config saved — reloading...", "success");
+      } else {
+        // Visual mode Apply is only for cache + rate limit settings
+        const { yaml: rawYaml } = await api.configRaw();
+        // We need to update cache and rate_limit in the YAML
+        // Simple approach: parse and re-save via the full config
+        const existingKeys = extractKeysFromYaml(rawYaml);
+        const providers = (config.providers || []).map((p) => {
+          if (p.api_key?.startsWith("****") && existingKeys[p.name]) {
+            return { ...p, api_key: existingKeys[p.name] };
+          }
+          return p;
+        });
+
+        // Replace proxy cache + rate_limit lines in raw YAML
+        let updated = mergeProvidersIntoYaml(rawYaml, providers);
+        updated = mergePoliciesIntoYaml(updated, config.policies || []);
+
+        // For cache/rate-limit, we do a simple line replacement
+        const lines = updated.split("\n");
+        const result: string[] = [];
+        let inCache = false;
+        let inRateLimit = false;
+
+        for (const line of lines) {
+          if (/^\s+cache\s*:/.test(line) && !line.startsWith("    ")) {
+            inCache = true;
+            result.push(line);
+            continue;
+          }
+          if (inCache) {
+            if (/^\s+enabled\s*:/.test(line)) {
+              result.push(`    enabled: ${config.cache?.enabled ?? false}`);
+              continue;
+            }
+            if (/^\s+ttl\s*:/.test(line)) {
+              result.push(`    ttl: ${config.cache?.ttl_seconds ?? 3600}`);
+              inCache = false;
+              continue;
+            }
+          }
+          if (/^\s+rate_limit\s*:/.test(line) && !line.startsWith("    ")) {
+            inRateLimit = true;
+            result.push(line);
+            continue;
+          }
+          if (inRateLimit) {
+            if (/^\s+requests_per_minute\s*:/.test(line)) {
+              result.push(`    requests_per_minute: ${config.rate_limit?.requests_per_minute ?? 60}`);
+              continue;
+            }
+            if (/^\s+burst\s*:/.test(line)) {
+              result.push(`    burst: ${config.rate_limit?.burst ?? 10}`);
+              inRateLimit = false;
+              continue;
+            }
+            if (/^\s+\S/.test(line) && !/^\s+burst/.test(line) && !/^\s+requests_per_minute/.test(line)) {
+              inRateLimit = false;
+            }
+          }
+          result.push(line);
+        }
+
+        const finalYaml = result.join("\n");
+        const validation = await api.validateConfig(finalYaml);
+        if (!validation.valid) {
+          showToast(`Validation error: ${validation.errors?.join(", ") ?? "unknown"}`, "error");
+          return;
+        }
+        await api.saveConfig(finalYaml);
+        await loadData();
+        showToast("Settings saved — reloading...", "success");
+      }
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to save config",
+        "error"
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleValidate() {
     setValidating(true);
     try {
-      const currentYaml = mode === "yaml" ? yaml : configToRivanoYaml(config);
+      const currentYaml = mode === "yaml" ? yaml : (await api.configRaw().then((r) => r.yaml));
       const result = await api.validateConfig(currentYaml);
       if (result.valid) {
         showToast("Configuration is valid", "success");
@@ -875,37 +1108,6 @@ export function ProxyConfigView() {
       );
     } finally {
       setValidating(false);
-    }
-  }
-
-  async function handleApply() {
-    setSaving(true);
-    try {
-      let currentYaml: string;
-      if (mode === "yaml") {
-        currentYaml = yaml;
-      } else {
-        // Visual mode: check if any providers have masked keys
-        const hasMaskedKeys = config.providers?.some(
-          (p) => p.api_key?.startsWith("****")
-        );
-        if (hasMaskedKeys) {
-          // Merge visual changes into raw YAML to preserve real API keys
-          const { yaml: rawYaml } = await api.configRaw();
-          currentYaml = mergeVisualIntoYaml(rawYaml, config);
-        } else {
-          currentYaml = configToRivanoYaml(config);
-        }
-      }
-      await api.saveConfig(currentYaml);
-      showToast("Config saved — reloading...", "success");
-    } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Failed to save config",
-        "error"
-      );
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -987,7 +1189,7 @@ export function ProxyConfigView() {
             {validating ? "Validating..." : "Validate"}
           </button>
 
-          {/* Apply */}
+          {/* Apply — for YAML mode or cache/rate-limit changes */}
           <button
             type="button"
             onClick={handleApply}
@@ -1001,7 +1203,16 @@ export function ProxyConfigView() {
 
       {/* Content */}
       {mode === "visual" ? (
-        <VisualMode config={config} onChange={setConfig} />
+        <VisualMode
+          config={config}
+          saving={saving}
+          onAddProvider={addProvider}
+          onRemoveProvider={removeProvider}
+          onAddPolicy={addPolicy}
+          onRemovePolicy={removePolicy}
+          onCacheChange={(c) => setConfig({ ...config, cache: c })}
+          onRateLimitChange={(r) => setConfig({ ...config, rate_limit: r })}
+        />
       ) : (
         <YamlMode yaml={yaml} onChange={setYaml} />
       )}
