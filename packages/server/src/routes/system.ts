@@ -18,30 +18,33 @@ export function registerSystemRoutes(app: FastifyInstance, state: ServerState) {
   }));
 
   // ── Status ─────────────────────────────────────────────────
-  app.get("/api/status", async () => ({
-    config: CONFIG_PATH,
-    dataDir: DATA_DIR,
-    version: VERSION,
-    uptime: Math.floor((Date.now() - state.startedAt) / 1000),
-    proxy: {
-      port: state.config.proxy.port,
-      providers: Object.keys(state.config.providers),
-      policies: state.config.proxy.policies.length,
-    },
-    observer: {
-      port: state.config.observer.port,
-      storage: state.config.observer.storage,
-      retentionDays: state.config.observer.retention_days,
-    },
-    agents: Array.from(state.agents.values())
-      .filter((a) => a.config)
-      .map((a) => ({
-        name: a.config.name,
-        provider: a.config.model.provider,
-        model: a.config.model.name,
-        deployedAt: a.deployedAt,
-      })),
-  }));
+  app.get("/api/status", async () => {
+    const cfg = state.config;
+    return {
+      config: CONFIG_PATH,
+      dataDir: DATA_DIR,
+      version: VERSION,
+      uptime: Math.floor((Date.now() - state.startedAt) / 1000),
+      proxy: cfg ? {
+        port: cfg.proxy.port,
+        providers: Object.keys(cfg.providers),
+        policies: cfg.proxy.policies.length,
+      } : null,
+      observer: cfg ? {
+        port: cfg.observer.port,
+        storage: cfg.observer.storage,
+        retentionDays: cfg.observer.retention_days,
+      } : null,
+      agents: Array.from(state.agents.values())
+        .filter((a) => a.config)
+        .map((a) => ({
+          name: a.config.name,
+          provider: a.config.model.provider,
+          model: a.config.model.name,
+          deployedAt: a.deployedAt,
+        })),
+    };
+  });
 
   // ── Logs ───────────────────────────────────────────────────
   app.get<{

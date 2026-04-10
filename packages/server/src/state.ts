@@ -22,6 +22,7 @@ export interface ServerState {
   config: import("@rivano/core").RivanoConfig | null;
   proxy: FastifyInstance | null;
   observer: FastifyInstance | null;
+  webuiApp: FastifyInstance | null;
   storage: Storage | null;
   agents: Map<string, { config: AgentConfig; deployedAt: string }>;
   logBuffer: LogEntry[];

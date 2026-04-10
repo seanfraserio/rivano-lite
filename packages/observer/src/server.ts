@@ -32,6 +32,20 @@ export function createObserverServer(
       return reply.status(400).send({ error: "Invalid trace: requires id, startTime, and spans" });
     }
 
+    if (typeof trace.id !== "string" || trace.id.length > 256) {
+      return reply.status(400).send({ error: "Invalid trace id: must be a string under 256 characters" });
+    }
+
+    if (trace.spans.length > 1000) {
+      return reply.status(400).send({ error: "Too many spans: maximum 1000 per trace" });
+    }
+
+    for (const span of trace.spans) {
+      if (!span.id || !span.type || !span.name || !span.startTime) {
+        return reply.status(400).send({ error: "Invalid span: requires id, type, name, and startTime" });
+      }
+    }
+
     storage.insertTrace(trace);
 
     const evaluatorResults: Record<string, unknown> = {};

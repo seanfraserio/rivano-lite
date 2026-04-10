@@ -29,6 +29,7 @@ const state: ServerState = {
   config: null,
   proxy: null,
   observer: null,
+  webuiApp: null,
   storage: null,
   agents: new Map(),
   logBuffer: [],
@@ -77,7 +78,7 @@ async function startProxy(config: RivanoConfig) {
       }
     },
   });
-  await state.proxy.listen({ port: config.proxy.port, host: "0.0.0.0" });
+  await state.proxy.listen({ port: config.proxy.port, host: "127.0.0.1" });
   state.bufferLog("info", `Proxy gateway listening on :${config.proxy.port}`);
   console.log(`[rivano] Proxy gateway listening on :${config.proxy.port}`);
 }
@@ -86,7 +87,7 @@ async function startObserver(config: RivanoConfig) {
   if (state.observer) await state.observer.close();
   if (!state.storage) state.storage = createStorage(DB_PATH);
   state.observer = await createObserverServer(config.observer, DB_PATH, { storage: state.storage });
-  await state.observer.listen({ port: config.observer.port, host: "0.0.0.0" });
+  await state.observer.listen({ port: config.observer.port, host: "127.0.0.1" });
   state.bufferLog("info", `Observer listening on :${config.observer.port}`);
   console.log(`[rivano] Observer listening on :${config.observer.port}`);
 }
@@ -211,6 +212,7 @@ async function startWebUI() {
 
   await app.listen({ port: WEBUI_PORT, host: "0.0.0.0" });
   console.log(`[rivano] WebUI API listening on :${WEBUI_PORT}`);
+  state.webuiApp = app;
 }
 
 function watchConfig(): ReturnType<typeof watch> {
@@ -249,6 +251,7 @@ async function shutdown(signal: string) {
   console.log(`\n[rivano] Received ${signal} — shutting down gracefully...`);
 
   const shutdowns: Promise<void>[] = [];
+  if (state.webuiApp) shutdowns.push(state.webuiApp.close());
   if (state.proxy) shutdowns.push(state.proxy.close());
   if (state.observer) shutdowns.push(state.observer.close());
 

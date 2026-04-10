@@ -24,7 +24,11 @@ export async function loadState(statePath: string): Promise<DeploymentState> {
   try {
     const raw = await readFile(statePath, "utf-8");
     return JSON.parse(raw) as DeploymentState;
-  } catch {
+  } catch (err: unknown) {
+    const isNotFound = err && typeof err === "object" && "code" in err && (err as { code: string }).code === "ENOENT";
+    if (!isNotFound) {
+      console.warn(`[engine] Warning: could not parse state file at ${statePath}, starting fresh`);
+    }
     return emptyState();
   }
 }

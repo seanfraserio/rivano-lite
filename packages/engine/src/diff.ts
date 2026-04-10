@@ -25,7 +25,9 @@ function detectChanges(
     changes.push(`model: ${current.model} -> ${desired.model.name}`);
   }
 
-  changes.push("config hash changed (system_prompt, tools, temperature, or other fields)");
+  if (changes.length === 0) {
+    changes.push("config hash changed (system_prompt, tools, temperature, or other fields)");
+  }
 
   return changes;
 }

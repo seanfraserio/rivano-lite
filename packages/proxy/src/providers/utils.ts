@@ -1,6 +1,6 @@
 import { resolve as dnsResolve } from "dns/promises";
 
-const BLOCKED_HEADERS = new Set(["host", "content-length", "x-api-key", "authorization"]);
+const BLOCKED_HEADERS = new Set(["host", "content-length", "x-api-key", "authorization", "x-rivano-provider"]);
 
 const ALLOWED_PROTOCOLS = new Set(["https:", "http:"]);
 

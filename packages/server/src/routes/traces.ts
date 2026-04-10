@@ -9,8 +9,8 @@ export function registerTraceRoutes(app: FastifyInstance, state: ServerState) {
     if (!state.storage) return { traces: [], total: 0 };
     const { limit = "50", offset = "0", source, since } = request.query;
     return state.storage.listTraces({
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
+      limit: Math.min(parseInt(limit, 10) || 50, 1000),
+      offset: Math.max(parseInt(offset, 10) || 0, 0),
       source: source || undefined,
       since: since ? parseInt(since, 10) : undefined,
     });
@@ -84,8 +84,9 @@ export function registerTraceRoutes(app: FastifyInstance, state: ServerState) {
   // ── Delete old traces ────────────────────────────────────────
   app.delete("/api/traces", async () => {
     if (!state.storage) return { deleted: 0 };
-    const deleted = state.storage.deleteOlderThan(state.config.observer.retention_days);
-    state.bufferLog("info", `Purged ${deleted} traces older than ${state.config.observer.retention_days} days`);
+    const retentionDays = state.config?.observer.retention_days ?? 30;
+    const deleted = state.storage.deleteOlderThan(retentionDays);
+    state.bufferLog("info", `Purged ${deleted} traces older than ${retentionDays} days`);
     return { deleted };
   });
 }

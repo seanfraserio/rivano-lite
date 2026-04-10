@@ -101,6 +101,8 @@ export function createProxyServer(
       metadata: {
         ip: request.ip,
         path,
+        temperature: body.temperature,
+        max_tokens: body.max_tokens,
       },
     };
 

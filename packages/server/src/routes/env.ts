@@ -68,6 +68,7 @@ export function registerEnvRoutes(app: FastifyInstance, state: ServerState) {
         }
 
         await writeEnvLines(envPath, lines);
+        process.env[key] = value;
         state.bufferLog("info", `Environment variable ${key} updated`);
         return { ok: true };
       });
@@ -96,6 +97,7 @@ export function registerEnvRoutes(app: FastifyInstance, state: ServerState) {
         }
 
         await writeEnvLines(envPath, filtered);
+        delete process.env[key];
         state.bufferLog("info", `Environment variable ${key} removed`);
         return { ok: true };
       });

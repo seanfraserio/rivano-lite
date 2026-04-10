@@ -106,12 +106,12 @@ export function createStorage(dbPath: string): Storage {
   db.exec(SCHEMA);
 
   const insertTraceStmt = db.prepare(`
-    INSERT INTO traces (id, source, start_time, end_time, total_cost_usd, span_count, metadata)
+    INSERT OR IGNORE INTO traces (id, source, start_time, end_time, total_cost_usd, span_count, metadata)
     VALUES ($id, $source, $startTime, $endTime, $totalCostUsd, $spanCount, $metadata)
   `);
 
   const insertSpanStmt = db.prepare(`
-    INSERT INTO spans (id, trace_id, parent_span_id, type, name, input, output, error, start_time, end_time, estimated_cost_usd, metadata)
+    INSERT OR IGNORE INTO spans (id, trace_id, parent_span_id, type, name, input, output, error, start_time, end_time, estimated_cost_usd, metadata)
     VALUES ($id, $traceId, $parentSpanId, $type, $name, $input, $output, $error, $startTime, $endTime, $estimatedCostUsd, $metadata)
   `);
 
