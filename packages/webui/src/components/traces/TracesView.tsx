@@ -58,26 +58,30 @@ export function TracesView() {
         }
 
         if (append) {
-          setTraces((prev) => [...prev, ...filtered]);
+          setTraces((prev) => {
+            const merged = [...prev, ...filtered];
+            const uniqueSources = Array.from(
+              new Set(merged.map((t) => t.source).filter(Boolean) as string[])
+            );
+            setSources(uniqueSources);
+            return merged;
+          });
         } else {
           setTraces(filtered);
+          const uniqueSources = Array.from(
+            new Set(filtered.map((t) => t.source).filter(Boolean) as string[])
+          );
+          setSources(uniqueSources);
         }
         setTotal(result.total);
         setError(null);
-
-        // Build source list from all seen traces
-        const allTraces = append ? [...traces, ...filtered] : filtered;
-        const uniqueSources = Array.from(
-          new Set(allTraces.map((t) => t.source).filter(Boolean) as string[])
-        );
-        setSources(uniqueSources);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load traces");
       } finally {
         setLoading(false);
       }
     },
-    [source, timeRange, offset, traces]
+    [source, timeRange, offset]
   );
 
   useEffect(() => {

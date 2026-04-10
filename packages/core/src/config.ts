@@ -105,6 +105,6 @@ export function validateConfig(config: unknown): RivanoConfig {
 export async function loadConfig(path: string): Promise<RivanoConfig> {
   const raw = await readFile(path, "utf-8");
   const interpolated = interpolateEnvVars(raw);
-  const parsed = yaml.load(interpolated);
+  const parsed = yaml.load(interpolated, { schema: yaml.JSON_SCHEMA });
   return validateConfig(parsed);
 }

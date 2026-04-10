@@ -153,6 +153,20 @@ async function startWebUI() {
 
   const app = Fastify({ logger: false });
 
+  // ── CORS — restrict API access to same-origin and localhost ──
+  app.addHook("onRequest", async (request, reply) => {
+    const origin = request.headers.origin;
+    // Allow same-origin (no origin header) and localhost origins
+    if (origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      reply.header("Access-Control-Allow-Origin", origin);
+      reply.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS");
+      reply.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    }
+    if (request.method === "OPTIONS") {
+      return reply.status(204).send();
+    }
+  });
+
   // ── API authentication middleware ────────────────────────────
   if (!API_KEY) {
     console.warn("[rivano] WARNING: No RIVANO_API_KEY set — API endpoints are unauthenticated!");

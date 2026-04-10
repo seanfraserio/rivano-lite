@@ -7,6 +7,24 @@ import { withLock } from "../utils/lock.js";
 
 const ENV_KEY_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
+/** Env vars that could enable code execution or hijack runtime behavior */
+const BLOCKED_ENV_KEYS = new Set([
+  "NODE_OPTIONS",
+  "NODE_PATH",
+  "NODE_EXTRA_CA_CERTS",
+  "LD_PRELOAD",
+  "LD_LIBRARY_PATH",
+  "DYLD_INSERT_LIBRARIES",
+  "DYLD_LIBRARY_PATH",
+  "PATH",
+  "HOME",
+  "SHELL",
+  "USER",
+  "LOGNAME",
+  "BUN_INSTALL",
+  "BUN_CONFIG_VERBOSE",
+]);
+
 function readEnvLines(envPath: string): Promise<string[]> {
   return readFile(envPath, "utf-8")
     .then((raw) => raw.split("\n"))
@@ -51,6 +69,9 @@ export function registerEnvRoutes(app: FastifyInstance, state: ServerState) {
       if (!ENV_KEY_PATTERN.test(key)) {
         return reply.status(400).send({ ok: false, error: "Invalid key: must be UPPER_SNAKE_CASE (e.g., ANTHROPIC_API_KEY)" });
       }
+      if (BLOCKED_ENV_KEYS.has(key)) {
+        return reply.status(400).send({ ok: false, error: `Blocked: ${key} is a restricted environment variable` });
+      }
       if (typeof value !== "string" || value.includes("\n") || value.includes("\r")) {
         return reply.status(400).send({ ok: false, error: "Invalid value: must not contain newlines" });
       }
@@ -80,9 +101,9 @@ export function registerEnvRoutes(app: FastifyInstance, state: ServerState) {
   });
 
   // ── Delete env key ──────────────────────────────────────────
-  app.delete<{ Body: { key: string } }>("/api/env", async (request, reply) => {
+  app.delete<{ Params: { key: string } }>("/api/env/:key", async (request, reply) => {
     try {
-      const { key } = request.body;
+      const { key } = request.params;
       if (!key || typeof key !== "string" || !ENV_KEY_PATTERN.test(key)) {
         return reply.status(400).send({ ok: false, error: "Invalid key" });
       }

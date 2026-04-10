@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatDuration } from "../../lib/format";
 
 interface Span {
   id: string;
@@ -41,12 +42,6 @@ const SPAN_BAR_COLORS: Record<string, string> = {
   retrieval: "bg-success",
   custom: "bg-text-muted",
 };
-
-function formatDuration(ms: number): string {
-  if (ms < 1) return "<1ms";
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(2)}s`;
-}
 
 function SpanRow({
   span,

@@ -14,13 +14,17 @@ function getApiKey(): string | null {
 
 async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   const apiKey = getApiKey();
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {};
+
+  // Only set Content-Type when there is a body to send
+  if (opts?.body) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (apiKey) {
     headers["Authorization"] = `Bearer ${apiKey}`;
   }
 
-  // For PUT/POST with body, merge headers after content-type
   const res = await fetch(`${API_BASE}${path}`, {
     ...opts,
     headers: { ...headers, ...(opts?.headers as Record<string, string> | undefined) },
@@ -51,6 +55,7 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
 export interface HealthStatus {
   status: string;
   version: string;
+  uptime: number;
   services: {
     proxy: string;
     observer: string;
@@ -151,9 +156,8 @@ export const api = {
     }),
 
   removeEnvVar: (key: string) =>
-    apiFetch<{ ok: boolean }>("/api/env", {
+    apiFetch<{ ok: boolean }>(`/api/env/${encodeURIComponent(key)}`, {
       method: "DELETE",
-      body: JSON.stringify({ key }),
     }),
 
   // ── Storage info ─────────────────────────────────────────────
@@ -169,6 +173,10 @@ export const api = {
   // ── Trace deletion ────────────────────────────────────────────
   purgeTraces: () =>
     apiFetch<{ deleted: number }>("/api/traces", { method: "DELETE" }),
+
+  /** Fetch logs (used by LogsView to include auth headers) */
+  logs: (path: string) =>
+    apiFetch<{ logs: Array<{ timestamp: string; level: string; message: string }> }>(path),
 
   /** Store the API key in localStorage for future requests */
   setApiKey: (key: string) => {

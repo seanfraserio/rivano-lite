@@ -1,5 +1,6 @@
 import { readFile, writeFile, rename, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
 import type { AgentConfig } from "@rivano/core";
 
 export interface AgentState {
@@ -63,7 +64,5 @@ function sortedStringify(value: unknown): string {
 
 export function hashConfig(agent: AgentConfig): string {
   const serialized = sortedStringify(agent);
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(serialized);
-  return hasher.digest("hex");
+  return createHash("sha256").update(serialized).digest("hex");
 }

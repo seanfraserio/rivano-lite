@@ -13,7 +13,7 @@ export function createObserverServer(
   dbPath: string,
   options?: ObserverServerOptions
 ): FastifyInstance {
-  const server = Fastify({ logger: true });
+  const server = Fastify({ logger: true, bodyLimit: 5 * 1024 * 1024 }); // 5MB max
   const ownsStorage = !options?.storage;
   const storage = options?.storage ?? createStorage(dbPath);
 

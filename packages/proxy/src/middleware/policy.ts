@@ -1,5 +1,5 @@
 import type { Policy, PipelineContext, PipelineResult } from "@rivano/core";
-import { evaluatePolicies, redactPii, extractMessageText } from "@rivano/core";
+import { evaluatePolicies, redactPii, extractMessageText, detectPii } from "@rivano/core";
 import type { Middleware } from "../pipeline.js";
 
 function extractText(ctx: PipelineContext, phase: "request" | "response"): string {
@@ -54,10 +54,19 @@ export function createPolicyMiddleware(
 
       const text = extractText(ctx, phase);
 
+      // Run PII detection if any policy uses pii_detected condition
+      const needsPii = phasePolicies.some((p) => p.condition.pii_detected !== undefined);
+      let piiDetected = (ctx.metadata.piiDetected as boolean) ?? false;
+      if (needsPii && !piiDetected) {
+        const piiResult = detectPii(text.slice(0, 10_000));
+        piiDetected = piiResult.found;
+        ctx.metadata.piiDetected = piiDetected;
+      }
+
       const evalCtx = {
         text,
         injectionScore: (ctx.metadata.injectionScore as number) ?? 0,
-        piiDetected: (ctx.metadata.piiDetected as boolean) ?? false,
+        piiDetected,
       };
 
       const result = evaluatePolicies(phasePolicies, evalCtx);

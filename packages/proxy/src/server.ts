@@ -49,8 +49,8 @@ export function createProxyServer(
   ]);
 
   const responsePipeline = new Pipeline([
-    createCacheMiddleware(config.cache),
     createPolicyMiddleware(config.policies, "response"),
+    createCacheMiddleware(config.cache),
     createAuditMiddleware({ onTrace: options?.onTrace }),
   ]);
 
@@ -144,13 +144,7 @@ export function createProxyServer(
     }
 
     if (providerResponse.stream) {
-      reply.raw.writeHead(providerResponse.status, {
-        "content-type": "text/event-stream",
-        "cache-control": "no-cache",
-        connection: "keep-alive",
-      });
-
-      // Buffer streaming response for policy evaluation
+      // Buffer the full stream first so response-phase policies (block/redact) can evaluate
       const chunks: Uint8Array[] = [];
       const reader = providerResponse.stream.getReader();
       try {
@@ -158,16 +152,14 @@ export function createProxyServer(
           const { done, value } = await reader.read();
           if (done) break;
           chunks.push(value);
-          reply.raw.write(value);
         }
-      } finally {
-        reply.raw.end();
+      } catch {
+        // Stream read error — work with what we have
       }
 
-      // Set provider response metadata from buffered stream for policy evaluation
+      // Set provider response metadata for policy evaluation
       try {
         const fullBody = Buffer.concat(chunks).toString("utf-8");
-        // Try to parse as JSON for non-streaming responses that were misidentified
         try {
           ctx.metadata.providerResponse = JSON.parse(fullBody);
         } catch {
@@ -179,7 +171,33 @@ export function createProxyServer(
       ctx.metadata.tokensIn = providerResponse.tokensIn;
       ctx.metadata.tokensOut = providerResponse.tokensOut;
 
-      await responsePipeline.execute(ctx);
+      // Run response pipeline BEFORE sending — policies can block/redact
+      const responseResult = await responsePipeline.execute(ctx);
+
+      if (responseResult === "block") {
+        stats.blocks++;
+        const statusCode = (ctx.metadata.statusCode as number) ?? 403;
+        return reply.status(statusCode).send({
+          error: ctx.metadata.errorMessage ?? "Response blocked by policy",
+          blocked_by: ctx.metadata.blockedBy,
+        });
+      }
+
+      // Stream the (potentially redacted) response to client
+      reply.raw.writeHead(providerResponse.status, {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+        connection: "keep-alive",
+      });
+      // If response was redacted, send the modified version
+      if (ctx.metadata.redacted && typeof ctx.metadata.providerResponse === "string") {
+        reply.raw.write(ctx.metadata.providerResponse);
+      } else {
+        for (const chunk of chunks) {
+          reply.raw.write(chunk);
+        }
+      }
+      reply.raw.end();
       return;
     }
 

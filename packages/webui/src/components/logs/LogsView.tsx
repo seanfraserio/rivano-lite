@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { api } from "../../lib/api";
 
 interface LogEntry {
   timestamp: string;
@@ -36,12 +37,10 @@ export function LogsView() {
 
     async function poll() {
       try {
-        const url = lastTimestamp
+        const path = lastTimestamp
           ? `/api/logs?since=${encodeURIComponent(lastTimestamp)}`
           : "/api/logs";
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("fetch failed");
-        const data = await res.json();
+        const data = await api.logs(path);
         const entries: LogEntry[] = data.logs ?? [];
         if (!active || entries.length === 0) {
           if (active) setConnected(true);

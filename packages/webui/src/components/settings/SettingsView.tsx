@@ -200,8 +200,8 @@ export function SettingsView() {
           <InfoRow
             label="Uptime"
             value={
-              health
-                ? formatUptime((health as Record<string, unknown> & HealthStatus).uptime as number || 0)
+              health?.uptime != null
+                ? formatUptime(health.uptime)
                 : "--"
             }
           />

@@ -24,6 +24,7 @@ export function evaluateCondition(
 
   if (condition.regex !== undefined) {
     try {
+      if (condition.regex.length > 1000) return false; // reject oversized patterns
       if (!safe(condition.regex)) return false;
       const regex = new RegExp(condition.regex);
       const truncated = context.text.slice(0, 10_000);

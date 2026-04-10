@@ -31,11 +31,22 @@ interface RateLimitConfig {
   burst: number;
 }
 
+/** Non-visual config fields preserved from original load */
+interface PreservedConfig {
+  proxyPort: number;
+  defaultProvider: string;
+  observerPort: number;
+  observerRetentionDays: number;
+  evaluators: string[];
+  agents: unknown[];
+}
+
 interface ProxyConfig {
   providers?: Provider[];
   policies?: Policy[];
   cache?: CacheConfig;
   rate_limit?: RateLimitConfig;
+  _preserved?: PreservedConfig;
 }
 
 type Mode = "visual" | "yaml";
@@ -50,8 +61,8 @@ interface Toast {
 const DEFAULT_URLS: Record<string, string> = {
   anthropic: "https://api.anthropic.com",
   openai: "https://api.openai.com",
-  google: "https://generativelanguage.googleapis.com",
-  custom: "",
+  ollama: "http://localhost:11434",
+  bedrock: "",
 };
 
 const ACTION_STYLES: Record<string, string> = {
@@ -108,31 +119,32 @@ function mergeVisualIntoYaml(rawYaml: string, config: ProxyConfig): string {
 }
 
 function configToRivanoYaml(config: ProxyConfig): string {
+  const p = config._preserved;
   const lines: string[] = ['version: "1"', ""];
 
   // Providers (object format, not array)
   lines.push("providers:");
   if (config.providers?.length) {
-    for (const p of config.providers) {
-      lines.push(`  ${p.name}:`);
-      if (p.api_key && !p.api_key.startsWith("****")) {
-        lines.push(`    api_key: "${p.api_key}"`);
+    for (const prov of config.providers) {
+      lines.push(`  ${prov.name}:`);
+      if (prov.api_key && !prov.api_key.startsWith("****")) {
+        lines.push(`    api_key: "${prov.api_key}"`);
       }
-      if (p.base_url) lines.push(`    base_url: "${p.base_url}"`);
-      if (p.models?.length) {
+      if (prov.base_url) lines.push(`    base_url: "${prov.base_url}"`);
+      if (prov.models?.length) {
         lines.push("    models:");
-        for (const m of p.models) lines.push(`      - ${m}`);
+        for (const m of prov.models) lines.push(`      - ${m}`);
       }
     }
   } else {
     lines.push("  {}");
   }
 
-  // Proxy
+  // Proxy — preserve port and default_provider from original config
   lines.push("");
   lines.push("proxy:");
-  lines.push(`  port: 4000`);
-  lines.push(`  default_provider: ${config.providers?.[0]?.name || "anthropic"}`);
+  lines.push(`  port: ${p?.proxyPort ?? 4000}`);
+  lines.push(`  default_provider: ${p?.defaultProvider ?? config.providers?.[0]?.name ?? "anthropic"}`);
   lines.push("  cache:");
   lines.push(`    enabled: ${config.cache?.enabled ?? false}`);
   lines.push(`    ttl: ${config.cache?.ttl_seconds ?? 3600}`);
@@ -145,11 +157,11 @@ function configToRivanoYaml(config: ProxyConfig): string {
   // Policies
   if (config.policies?.length) {
     lines.push("  policies:");
-    for (const p of config.policies) {
-      lines.push(`    - name: ${p.name}`);
-      lines.push(`      on: ${p.phase}`);
+    for (const pol of config.policies) {
+      lines.push(`    - name: ${pol.name}`);
+      lines.push(`      on: ${pol.phase}`);
       try {
-        const cond = JSON.parse(p.condition);
+        const cond = JSON.parse(pol.condition);
         lines.push("      condition:");
         for (const [k, v] of Object.entries(cond)) {
           lines.push(`        ${k}: ${v}`);
@@ -157,26 +169,45 @@ function configToRivanoYaml(config: ProxyConfig): string {
       } catch {
         lines.push(`      condition: {}`);
       }
-      lines.push(`      action: ${p.action}`);
-      if (p.description) lines.push(`      message: "${p.description}"`);
+      lines.push(`      action: ${pol.action}`);
+      if (pol.description) lines.push(`      message: "${pol.description}"`);
     }
   } else {
     lines.push("  policies: []");
   }
 
-  // Observer
+  // Observer — preserve from original config
   lines.push("");
   lines.push("observer:");
-  lines.push("  port: 4100");
+  lines.push(`  port: ${p?.observerPort ?? 4100}`);
   lines.push("  storage: sqlite");
-  lines.push("  retention_days: 30");
+  lines.push(`  retention_days: ${p?.observerRetentionDays ?? 30}`);
   lines.push("  evaluators:");
-  lines.push("    - latency");
-  lines.push("    - cost");
+  for (const ev of (p?.evaluators ?? ["latency", "cost"])) {
+    lines.push(`    - ${ev}`);
+  }
 
-  // Agents
+  // Agents — preserve from original config
   lines.push("");
-  lines.push("agents: []");
+  if (p?.agents?.length) {
+    lines.push("agents:");
+    // Re-serialize agents as YAML
+    for (const agent of p.agents as Array<Record<string, unknown>>) {
+      lines.push(`  - name: ${agent.name}`);
+      if (agent.description) lines.push(`    description: "${agent.description}"`);
+      if (agent.model) {
+        const model = agent.model as Record<string, unknown>;
+        lines.push("    model:");
+        lines.push(`      provider: ${model.provider}`);
+        lines.push(`      name: ${model.name}`);
+        if (model.temperature != null) lines.push(`      temperature: ${model.temperature}`);
+        if (model.max_tokens != null) lines.push(`      max_tokens: ${model.max_tokens}`);
+      }
+      if (agent.system_prompt) lines.push(`    system_prompt: "${agent.system_prompt}"`);
+    }
+  } else {
+    lines.push("agents: []");
+  }
 
   return lines.join("\n") + "\n";
 }
@@ -268,8 +299,8 @@ function AddProviderForm({
           >
             <option value="anthropic">Anthropic</option>
             <option value="openai">OpenAI</option>
-            <option value="google">Google</option>
-            <option value="custom">Custom</option>
+            <option value="ollama">Ollama</option>
+            <option value="bedrock">AWS Bedrock</option>
           </select>
         </div>
         <div>
@@ -732,6 +763,9 @@ export function ProxyConfigView() {
     const cache = proxy.cache as Record<string, unknown> | undefined;
     const rateLimit = proxy.rate_limit as Record<string, unknown> | undefined;
 
+    const observer = (data.observer ?? {}) as Record<string, unknown>;
+    const agents = (data.agents ?? []) as unknown[];
+
     return {
       providers,
       policies,
@@ -743,6 +777,14 @@ export function ProxyConfigView() {
         requests_per_minute: (rateLimit.requests_per_minute as number) ?? 60,
         burst: (rateLimit.burst as number) ?? 10,
       } : { requests_per_minute: 60, burst: 10 },
+      _preserved: {
+        proxyPort: (proxy.port as number) ?? 4000,
+        defaultProvider: (proxy.default_provider as string) ?? "anthropic",
+        observerPort: (observer.port as number) ?? 4100,
+        observerRetentionDays: (observer.retention_days as number) ?? 30,
+        evaluators: (observer.evaluators as string[]) ?? ["latency", "cost"],
+        agents,
+      },
     };
   }
 
