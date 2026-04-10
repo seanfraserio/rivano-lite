@@ -39,8 +39,8 @@ FROM oven/bun:1.2-alpine
 
 RUN apk add --no-cache curl tini
 
-# Create non-root user for security
-RUN adduser -D -u 1000 rivano
+# Create non-root user for security (UID 1001 — 1000 is taken by bun base image)
+RUN adduser -D -u 1001 rivano
 
 WORKDIR /rivano
 
