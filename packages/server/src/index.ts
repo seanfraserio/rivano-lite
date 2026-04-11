@@ -11,6 +11,7 @@ import { registerConfigRoutes } from "./routes/config.js";
 import { registerTraceRoutes } from "./routes/traces.js";
 import { registerEnvRoutes } from "./routes/env.js";
 import { registerSystemRoutes } from "./routes/system.js";
+import { getBindHost } from "./utils/network.js";
 
 const BANNER = `
   ┌─────────────────────────────────────┐
@@ -70,6 +71,7 @@ async function loadAndValidateConfig(): Promise<RivanoConfig> {
 
 async function startProxy(config: RivanoConfig) {
   if (state.proxy) await state.proxy.close();
+  const bindHost = getBindHost();
   state.proxy = await createProxyServer(config.proxy, config.providers, {
     onTrace: (trace) => {
       if (state.storage) {
@@ -78,7 +80,7 @@ async function startProxy(config: RivanoConfig) {
       }
     },
   });
-  await state.proxy.listen({ port: config.proxy.port, host: "127.0.0.1" });
+  await state.proxy.listen({ port: config.proxy.port, host: bindHost });
   state.bufferLog("info", `Proxy gateway listening on :${config.proxy.port}`);
   console.log(`[rivano] Proxy gateway listening on :${config.proxy.port}`);
 }
@@ -86,8 +88,9 @@ async function startProxy(config: RivanoConfig) {
 async function startObserver(config: RivanoConfig) {
   if (state.observer) await state.observer.close();
   if (!state.storage) state.storage = createStorage(DB_PATH);
+  const bindHost = getBindHost();
   state.observer = await createObserverServer(config.observer, DB_PATH, { storage: state.storage });
-  await state.observer.listen({ port: config.observer.port, host: "127.0.0.1" });
+  await state.observer.listen({ port: config.observer.port, host: bindHost });
   state.bufferLog("info", `Observer listening on :${config.observer.port}`);
   console.log(`[rivano] Observer listening on :${config.observer.port}`);
 }
