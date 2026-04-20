@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, test, beforeEach } from "bun:test";
-import { createProxyServer, type ProxyOptions } from "../src/index.js";
+import { afterEach, describe, expect, test } from "bun:test";
 import type { Trace } from "@rivano/core";
+import { createProxyServer, type ProxyOptions } from "../src/index.js";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -351,7 +351,11 @@ describe("Provider error handling", () => {
 
   test("falls back to default provider for unknown path", async () => {
     // When no header and path doesn't match known paths, default_provider is used
-    const { app, providerCalls, _afterEach: _cleanup } = createTestServer({
+    const {
+      app,
+      providerCalls,
+      _afterEach: _cleanup,
+    } = createTestServer({
       default_provider: "openai",
     });
     const res = await app.inject({
@@ -373,10 +377,11 @@ describe("Provider error handling", () => {
 
 describe("Provider selection", () => {
   test("uses x-rivano-provider header to override default", async () => {
-    const { app, providerCalls, _afterEach: _cleanup } = createTestServer(
-      { default_provider: "openai" },
-      { base_url: "http://localhost:9999" },
-    );
+    const {
+      app,
+      providerCalls,
+      _afterEach: _cleanup,
+    } = createTestServer({ default_provider: "openai" }, { base_url: "http://localhost:9999" });
 
     const res = await app.inject({
       method: "POST",
@@ -439,7 +444,11 @@ describe("Audit trace emission", () => {
   });
 
   test("emits trace with action=blocked when policy blocks", async () => {
-    const { app, traces, _afterEach: _cleanup } = createTestServer({
+    const {
+      app,
+      traces,
+      _afterEach: _cleanup,
+    } = createTestServer({
       policies: [
         {
           name: "block-vip",

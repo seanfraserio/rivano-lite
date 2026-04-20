@@ -12,21 +12,21 @@ describe("sanitizeYamlObj", () => {
     const obj = { safe: "value" };
     Object.defineProperty(obj, "__proto__", { value: { evil: true }, enumerable: true, configurable: true });
     const sanitized = sanitizeYamlObj(obj);
-    expect(sanitized.hasOwnProperty("__proto__")).toBe(false);
+    expect(Object.hasOwn(sanitized, "__proto__")).toBe(false);
     expect((sanitized as Record<string, unknown>).safe).toBe("value");
   });
 
   test("removes own enumerable constructor property", () => {
     const obj = { constructor: { evil: true }, safe: "value" };
     const sanitized = sanitizeYamlObj(obj);
-    expect(sanitized.hasOwnProperty("constructor")).toBe(false);
+    expect(Object.hasOwn(sanitized, "constructor")).toBe(false);
     expect((sanitized as Record<string, unknown>).safe).toBe("value");
   });
 
   test("removes own enumerable prototype property", () => {
     const obj = { prototype: "evil", safe: "value" };
     const sanitized = sanitizeYamlObj(obj);
-    expect(sanitized.hasOwnProperty("prototype")).toBe(false);
+    expect(Object.hasOwn(sanitized, "prototype")).toBe(false);
   });
 
   test("recursively sanitizes nested objects", () => {
@@ -38,9 +38,14 @@ describe("sanitizeYamlObj", () => {
 
     const sanitized = sanitizeYamlObj(obj);
     const result = sanitized as Record<string, unknown>;
-    expect(result.level1.hasOwnProperty("__proto__")).toBe(false);
-    expect((result.level1 as Record<string, unknown>).level2.hasOwnProperty("constructor")).toBe(false);
-    expect((result.level1 as Record<string, unknown>).level2).toHaveProperty("safe", "value");
+    // Extract into typed variables so TypeScript can track nullability
+    const level1Obj = result.level1 as Record<string, unknown> | undefined;
+    if (!level1Obj) throw new Error("level1 missing");
+    expect(Object.hasOwn(level1Obj, "__proto__")).toBe(false);
+    const level2Obj = level1Obj.level2 as Record<string, unknown> | undefined;
+    if (!level2Obj) throw new Error("level2 missing");
+    expect(Object.hasOwn(level2Obj, "constructor")).toBe(false);
+    expect(level2Obj).toHaveProperty("safe", "value");
   });
 
   test("recursively sanitizes arrays", () => {
@@ -49,8 +54,8 @@ describe("sanitizeYamlObj", () => {
     const obj2 = { constructor: "evil", safe: "value" };
     const obj = [obj1, obj2];
     const sanitized = sanitizeYamlObj(obj) as Array<Record<string, unknown>>;
-    expect(sanitized[0].hasOwnProperty("__proto__")).toBe(false);
-    expect(sanitized[1].hasOwnProperty("constructor")).toBe(false);
+    expect(Object.hasOwn(sanitized[0], "__proto__")).toBe(false);
+    expect(Object.hasOwn(sanitized[1], "constructor")).toBe(false);
     expect(sanitized[1]).toHaveProperty("safe", "value");
   });
 
@@ -266,8 +271,10 @@ agents: []
 });
 
 describe("interpolateEnvVars", () => {
+  /* biome-ignore lint/suspicious/noTemplateCurlyInString: ${VAR} is intentional literal for interpolateEnvVars */
   test("replaces ${VAR} with environment variable values", () => {
     process.env.TEST_VAR = "hello";
+    /* biome-ignore lint/suspicious/noTemplateCurlyInString: ${VAR} is intentional literal for interpolateEnvVars */
     const result = interpolateEnvVars("Hello ${TEST_VAR}!", { strict: true });
     expect(result).toBe("Hello hello!");
     delete process.env.TEST_VAR;
@@ -275,12 +282,15 @@ describe("interpolateEnvVars", () => {
 
   test("leaves unset variables as placeholders with strict: false", () => {
     delete process.env.UNSET_TEST_VAR;
+    /* biome-ignore lint/suspicious/noTemplateCurlyInString: ${VAR} is intentional literal for interpolateEnvVars */
     const result = interpolateEnvVars("Value: ${UNSET_TEST_VAR}");
+    /* biome-ignore lint/suspicious/noTemplateCurlyInString: expects same ${VAR} format back */
     expect(result).toBe("Value: ${UNSET_TEST_VAR}");
   });
 
   test("throws with strict: true when variables are missing", () => {
     delete process.env.STRICT_TEST_VAR;
+    /* biome-ignore lint/suspicious/noTemplateCurlyInString: ${VAR} is intentional literal for interpolateEnvVars */
     expect(() => interpolateEnvVars("Value: ${STRICT_TEST_VAR}", { strict: true })).toThrow(
       /Unresolved environment variables/,
     );

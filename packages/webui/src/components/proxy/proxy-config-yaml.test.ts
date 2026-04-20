@@ -37,6 +37,7 @@ agents: []
 
     expect(extractKeysFromYaml(yaml)).toEqual({
       anthropic: "sk-ant-123",
+      /* biome-ignore lint/suspicious/noTemplateCurlyInString: ${VAR} is intentional literal for YAML test data */
       openai: "${OPENAI_API_KEY}",
     });
   });

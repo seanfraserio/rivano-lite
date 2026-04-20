@@ -4,6 +4,7 @@ import { interpolateEnvVars } from "./config.js";
 describe("interpolateEnvVars", () => {
   test("replaces environment variables", () => {
     process.env.TEST_VAR_INTERPOLATE = "hello";
+    /* biome-ignore lint/suspicious/noTemplateCurlyInString: ${VAR} is intentional literal for interpolateEnvVars */
     const result = interpolateEnvVars("prefix_${TEST_VAR_INTERPOLATE}_suffix");
     expect(result).toBe("prefix_hello_suffix");
     delete process.env.TEST_VAR_INTERPOLATE;
@@ -12,6 +13,7 @@ describe("interpolateEnvVars", () => {
   test("replaces multiple env vars in one string", () => {
     process.env.HOST_VAR = "localhost";
     process.env.PORT_VAR = "8080";
+    /* biome-ignore lint/suspicious/noTemplateCurlyInString: ${VAR} is intentional literal for interpolateEnvVars */
     const result = interpolateEnvVars("${HOST_VAR}:${PORT_VAR}");
     expect(result).toBe("localhost:8080");
     delete process.env.HOST_VAR;
@@ -19,7 +21,9 @@ describe("interpolateEnvVars", () => {
   });
 
   test("leaves unset env vars as placeholders", () => {
+    /* biome-ignore lint/suspicious/noTemplateCurlyInString: ${VAR} is intentional literal for interpolateEnvVars */
     const result = interpolateEnvVars("key: ${NONEXISTENT_VAR_12345}");
+    /* biome-ignore lint/suspicious/noTemplateCurlyInString: expects same ${VAR} format back */
     expect(result).toBe("key: ${NONEXISTENT_VAR_12345}");
   });
 
@@ -30,6 +34,7 @@ describe("interpolateEnvVars", () => {
     const warnings: string[] = [];
     console.warn = (...args: unknown[]) => warnings.push(args.join(" "));
 
+    /* biome-ignore lint/suspicious/noTemplateCurlyInString: ${VAR} is intentional literal for interpolateEnvVars */
     interpolateEnvVars("${DEFINITELY_NOT_SET_ABC123}");
 
     console.warn = originalWarn;
@@ -47,6 +52,7 @@ describe("interpolateEnvVars", () => {
 
   test("trims whitespace in var name", () => {
     process.env.TRIM_VAR = "value";
+    /* biome-ignore lint/suspicious/noTemplateCurlyInString: ${VAR} is intentional literal for interpolateEnvVars */
     const result = interpolateEnvVars("${ TRIM_VAR }");
     expect(result).toBe("value");
     delete process.env.TRIM_VAR;

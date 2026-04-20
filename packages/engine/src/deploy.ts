@@ -100,7 +100,8 @@ export async function deploy(
 
     try {
       if (diff.action === "create" || diff.action === "update") {
-        const agent = diff.desired!;
+        // create/update actions always have desired set by computeDiff
+        const agent = diff.desired as AgentConfig;
         const validation = validate([agent]);
         if (!validation.valid) {
           results.push({

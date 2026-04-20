@@ -116,8 +116,13 @@ async function deployAgents(config: RivanoConfig) {
   const results = await deploy(config.agents, STATE_PATH);
   for (const result of results) {
     if (result.success) {
+      const agentConfig = config.agents.find((a) => a.name === result.agent);
+      if (!agentConfig) {
+        state.bufferLog("error", `Agent "${result.agent}" not found in config after deploy`);
+        continue;
+      }
       state.agents.set(result.agent, {
-        config: config.agents.find((a) => a.name === result.agent)!,
+        config: agentConfig,
         deployedAt: new Date().toISOString(),
       });
       if (result.action !== "unchanged") {
@@ -210,6 +215,8 @@ async function startWebUI() {
     await app.register(fastifyStatic, { root: webuiDist, prefix: "/", wildcard: false });
     for (const route of ["proxy", "traces", "agents", "logs", "settings"]) {
       app.get(`/${route}`, async (_req, reply) => {
+        // webuiDist is checked above, but TS can't track nullability across async boundary
+        // biome-ignore lint/style/noNonNullAssertion: async closure scope issue
         const html = await readFile(resolve(webuiDist!, route, "index.html"), "utf-8");
         reply.type("text/html").send(html);
       });
