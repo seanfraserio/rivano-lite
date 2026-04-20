@@ -1,8 +1,8 @@
+import { readFile, rename, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { readFile, writeFile, rename } from "fs/promises";
-import { join } from "path";
-import { DATA_DIR } from "../state.js";
 import type { ServerState } from "../state.js";
+import { DATA_DIR } from "../state.js";
 import { withLock } from "../utils/lock.js";
 
 const ENV_KEY_PATTERN = /^[A-Z][A-Z0-9_]*$/;
@@ -32,8 +32,8 @@ function readEnvLines(envPath: string): Promise<string[]> {
 }
 
 async function writeEnvLines(envPath: string, lines: string[]) {
-  const content = lines.filter((l) => l.trim()).join("\n") + "\n";
-  const tmpPath = envPath + ".tmp";
+  const content = `${lines.filter((l) => l.trim()).join("\n")}\n`;
+  const tmpPath = `${envPath}.tmp`;
   await writeFile(tmpPath, content, "utf-8");
   await rename(tmpPath, envPath);
 }
@@ -50,7 +50,7 @@ export function registerEnvRoutes(app: FastifyInstance, state: ServerState) {
         .map((l) => {
           const [key, ...rest] = l.split("=");
           const value = rest.join("=");
-          const masked = value.length > 4 ? "****" + value.slice(-4) : "****";
+          const masked = value.length > 4 ? `****${value.slice(-4)}` : "****";
           return { key: key.trim(), masked, hasValue: value.trim().length > 0 };
         });
       return { keys };
@@ -67,7 +67,9 @@ export function registerEnvRoutes(app: FastifyInstance, state: ServerState) {
         return reply.status(400).send({ ok: false, error: "Missing key" });
       }
       if (!ENV_KEY_PATTERN.test(key)) {
-        return reply.status(400).send({ ok: false, error: "Invalid key: must be UPPER_SNAKE_CASE (e.g., ANTHROPIC_API_KEY)" });
+        return reply
+          .status(400)
+          .send({ ok: false, error: "Invalid key: must be UPPER_SNAKE_CASE (e.g., ANTHROPIC_API_KEY)" });
       }
       if (BLOCKED_ENV_KEYS.has(key)) {
         return reply.status(400).send({ ok: false, error: `Blocked: ${key} is a restricted environment variable` });

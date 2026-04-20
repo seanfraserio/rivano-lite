@@ -7,8 +7,6 @@ const MAX_EVAL_TEXT_LENGTH = 10_000;
  * Truncates to MAX_EVAL_TEXT_LENGTH characters to prevent catastrophic backtracking.
  */
 export function extractMessageText(messages: ChatMessage[]): string {
-  const text = messages
-    .map((m) => (typeof m.content === "string" ? m.content : ""))
-    .join("\n");
+  const text = messages.map((m) => (typeof m.content === "string" ? m.content : "")).join("\n");
   return text.slice(0, MAX_EVAL_TEXT_LENGTH);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { detectPii, redactPii, DEFAULT_PII_PATTERNS } from "./pii.js";
+import { DEFAULT_PII_PATTERNS, detectPii, redactPii } from "./pii.js";
 
 describe("detectPii", () => {
   test("detects email addresses", () => {

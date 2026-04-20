@@ -1,5 +1,5 @@
 import type { PipelineContext, PipelineResult } from "@rivano/core";
-import { scoreInjection, extractMessageText } from "@rivano/core";
+import { extractMessageText, scoreInjection } from "@rivano/core";
 import type { Middleware } from "../pipeline.js";
 
 export function createInjectionMiddleware(threshold?: number): Middleware {

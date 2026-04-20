@@ -43,7 +43,7 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
       throw new Error(
         apiKey
           ? `API key is invalid or expired. Please update it in Settings → API Authentication.`
-          : `Set your API key in Settings → API Authentication to access ${path}.`
+          : `Set your API key in Settings → API Authentication to access ${path}.`,
       );
     }
     throw new Error(`API ${path}: ${res.status} ${res.statusText}${body ? ` — ${body}` : ""}`);
@@ -153,17 +153,14 @@ export const api = {
     if (params?.status) query.set("status", params.status);
     if (params?.minCostUsd != null) query.set("minCostUsd", String(params.minCostUsd));
     if (params?.maxCostUsd != null) query.set("maxCostUsd", String(params.maxCostUsd));
-    return apiFetch<{ traces: TraceListItem[]; total: number }>(
-      `/api/traces?${query}`
-    );
+    return apiFetch<{ traces: TraceListItem[]; total: number }>(`/api/traces?${query}`);
   },
 
   trace: (id: string) => apiFetch<TraceListItem>(`/api/traces/${id}`),
   traceStats: () => apiFetch<TraceStats>("/api/traces/stats"),
 
   // ── Environment variables ────────────────────────────────────
-  envKeys: () =>
-    apiFetch<{ keys: Array<{ key: string; masked: string; hasValue: boolean }> }>("/api/env"),
+  envKeys: () => apiFetch<{ keys: Array<{ key: string; masked: string; hasValue: boolean }> }>("/api/env"),
 
   saveEnvVar: (key: string, value: string) =>
     apiFetch<{ ok: boolean }>("/api/env", {
@@ -177,22 +174,19 @@ export const api = {
     }),
 
   // ── Storage info ─────────────────────────────────────────────
-  storage: () =>
-    apiFetch<{ dbPath: string; dbSizeBytes: number; dbSizeMB: number }>("/api/storage"),
+  storage: () => apiFetch<{ dbPath: string; dbSizeBytes: number; dbSizeMB: number }>("/api/storage"),
 
   // ── Policy activity ───────────────────────────────────────────
   policyActivity: () =>
     apiFetch<{ summary: { total: number; allowed: number; blocked: number; redacted: number; warned: number } }>(
-      "/api/policy-activity"
+      "/api/policy-activity",
     ).catch(() => ({ summary: { total: 0, allowed: 0, blocked: 0, redacted: 0, warned: 0 } })),
 
   // ── Trace deletion ────────────────────────────────────────────
-  purgeTraces: () =>
-    apiFetch<{ deleted: number }>("/api/traces", { method: "DELETE" }),
+  purgeTraces: () => apiFetch<{ deleted: number }>("/api/traces", { method: "DELETE" }),
 
   /** Fetch logs (used by LogsView to include auth headers) */
-  logs: (path: string) =>
-    apiFetch<{ logs: Array<{ timestamp: string; level: string; message: string }> }>(path),
+  logs: (path: string) => apiFetch<{ logs: Array<{ timestamp: string; level: string; message: string }> }>(path),
 
   /** Store the API key in localStorage for future requests */
   setApiKey: (key: string) => {

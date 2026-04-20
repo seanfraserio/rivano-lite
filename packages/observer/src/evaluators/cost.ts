@@ -1,4 +1,4 @@
-import type { Trace, Span } from "@rivano/core";
+import type { Span, Trace } from "@rivano/core";
 import { estimateCost } from "@rivano/core";
 import type { EvaluatorResult } from "./latency.js";
 

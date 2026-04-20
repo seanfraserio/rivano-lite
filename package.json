@@ -14,14 +14,16 @@
     "test": "turbo test",
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",
+    "lint:check": "biome check --no-errors-on-unmatched .",
     "clean": "turbo clean",
     "docker:build": "docker build -t rivano-lite -f container/Dockerfile .",
     "docker:run": "docker run -d --name rivano-lite -p 9000:9000 -p 4000:4000 -p 4100:4100 -v ~/.rivano:/data rivano-lite"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.12",
+    "@types/bun": "^1.2.0",
     "turbo": "^2.5.0",
-    "typescript": "^5.7.0",
-    "@types/bun": "^1.2.0"
+    "typescript": "^5.7.0"
   },
   "engines": {
     "node": ">=20.0.0"

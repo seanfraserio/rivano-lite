@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { validate } from "./deploy.js";
 import type { AgentConfig } from "@rivano/core";
+import { validate } from "./deploy.js";
 
 describe("validate", () => {
   test("accepts valid agent config", () => {
@@ -26,9 +26,7 @@ describe("validate", () => {
   });
 
   test("rejects agent without model.provider", () => {
-    const agents = [
-      { name: "test", model: { name: "claude-sonnet-4-5" }, system_prompt: "test" },
-    ] as AgentConfig[];
+    const agents = [{ name: "test", model: { name: "claude-sonnet-4-5" }, system_prompt: "test" }] as AgentConfig[];
     const result = validate(agents);
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => e.error.includes("model.provider"))).toBe(true);
@@ -53,9 +51,7 @@ describe("validate", () => {
   });
 
   test("rejects agent without system_prompt", () => {
-    const agents = [
-      { name: "test", model: { provider: "anthropic" as const, name: "claude" } },
-    ] as AgentConfig[];
+    const agents = [{ name: "test", model: { provider: "anthropic" as const, name: "claude" } }] as AgentConfig[];
     const result = validate(agents);
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => e.error.includes("system_prompt"))).toBe(true);
@@ -88,9 +84,7 @@ describe("validate", () => {
   });
 
   test("collects multiple errors", () => {
-    const agents = [
-      { model: {}, system_prompt: "x" },
-    ] as AgentConfig[];
+    const agents = [{ model: {}, system_prompt: "x" }] as AgentConfig[];
     const result = validate(agents);
     expect(result.errors.length).toBeGreaterThan(1);
   });

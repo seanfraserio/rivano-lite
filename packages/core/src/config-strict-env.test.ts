@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { loadConfig } from "./config";
 
 describe("loadConfig strict env validation", () => {
@@ -36,7 +36,7 @@ observer:
 
 agents: []
 `,
-      "utf8"
+      "utf8",
     );
 
     await expect(loadConfig(path)).rejects.toThrow(/MISSING_ANTHROPIC_KEY/);

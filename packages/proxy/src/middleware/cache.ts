@@ -36,11 +36,17 @@ class LRUCache {
 
   constructor(maxEntries = 1000) {
     this.maxEntries = maxEntries;
-  };
+  }
 
-  get hits() { return this._hits; }
-  get misses() { return this._misses; }
-  get size() { return this.map.size; }
+  get hits() {
+    return this._hits;
+  }
+  get misses() {
+    return this._misses;
+  }
+  get size() {
+    return this.map.size;
+  }
 
   get(key: string): CacheEntry | undefined {
     const node = this.map.get(key);
@@ -68,8 +74,12 @@ class LRUCache {
     }
   }
 
-  incrementMisses(): void { this._misses++; }
-  incrementHits(): void { this._hits++; }
+  incrementMisses(): void {
+    this._misses++;
+  }
+  incrementHits(): void {
+    this._hits++;
+  }
 
   private moveToHead(node: CacheNode): void {
     if (node === this.head) return;
@@ -106,12 +116,7 @@ class LRUCache {
 export function createCacheMiddleware(config: CacheConfig): Middleware {
   const cache = new LRUCache(config.maxEntries);
 
-  async function computeKey(
-    provider: string,
-    model: string,
-    messages: unknown[],
-    params?: unknown,
-  ): Promise<string> {
+  async function computeKey(provider: string, model: string, messages: unknown[], params?: unknown): Promise<string> {
     // Include messages + all request parameters that affect the response
     const raw = JSON.stringify({ provider, model, messages, params });
     const encoded = new TextEncoder().encode(raw);

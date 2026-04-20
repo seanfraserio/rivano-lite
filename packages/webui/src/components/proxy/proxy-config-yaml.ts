@@ -23,10 +23,7 @@ function yamlScalar(value: string): string {
   return `"${escaped}"`;
 }
 
-export function mergeProvidersIntoYaml(
-  rawYaml: string,
-  providers: ProxyConfigYamlProvider[]
-): string {
+export function mergeProvidersIntoYaml(rawYaml: string, providers: ProxyConfigYamlProvider[]): string {
   const lines = rawYaml.split("\n");
   const result: string[] = [];
   let skipUntilNextTopLevel = false;
@@ -81,13 +78,10 @@ export function mergeProvidersIntoYaml(
   }
 
   result.splice(actualInsert, 0, ...providerLines);
-  return result.join("\n") + "\n";
+  return `${result.join("\n")}\n`;
 }
 
-export function mergePoliciesIntoYaml(
-  rawYaml: string,
-  policies: ProxyConfigYamlPolicy[]
-): string {
+export function mergePoliciesIntoYaml(rawYaml: string, policies: ProxyConfigYamlPolicy[]): string {
   const lines = rawYaml.split("\n");
   const result: string[] = [];
   let inProxy = false;
@@ -132,11 +126,7 @@ export function mergePoliciesIntoYaml(
   for (let i = 0; i < result.length; i++) {
     if (/^proxy\s*:/.test(result[i])) {
       proxyLineIdx = i;
-    } else if (
-      proxyLineIdx >= 0 &&
-      /^\S/.test(result[i]) &&
-      result[i].trim().length > 0
-    ) {
+    } else if (proxyLineIdx >= 0 && /^\S/.test(result[i]) && result[i].trim().length > 0) {
       nextTopLevelAfterProxy = i;
       break;
     }

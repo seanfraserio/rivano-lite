@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { hashConfig } from "./state.js";
 import type { AgentConfig } from "@rivano/core";
+import { hashConfig } from "./state.js";
 
 describe("hashConfig", () => {
   test("produces a deterministic SHA-256 hex string", () => {

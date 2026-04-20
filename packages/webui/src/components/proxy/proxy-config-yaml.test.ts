@@ -1,16 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  extractKeysFromYaml,
-  mergePoliciesIntoYaml,
-  mergeProvidersIntoYaml,
-} from "./proxy-config-yaml";
+import { extractKeysFromYaml, mergePoliciesIntoYaml, mergeProvidersIntoYaml } from "./proxy-config-yaml";
 
-const DEFAULT_YAML = readFileSync(
-  join(import.meta.dir, "../../../../../config/defaults/rivano.yaml"),
-  "utf8"
-);
+const DEFAULT_YAML = readFileSync(join(import.meta.dir, "../../../../../config/defaults/rivano.yaml"), "utf8");
 
 describe("proxy-config-yaml", () => {
   test("extractKeysFromYaml returns real provider keys from raw yaml", () => {

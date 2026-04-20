@@ -1,9 +1,9 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { Span, Trace } from "@rivano/core";
 import { createStorage, type Storage } from "./sqlite.js";
-import type { Trace, Span } from "@rivano/core";
-import { tmpdir } from "os";
-import { join } from "path";
-import { unlinkSync } from "fs";
 
 function makeTrace(id: string, opts?: { source?: string; spans?: Span[] }): Trace {
   return {
@@ -43,7 +43,9 @@ describe("SQLite Storage", () => {
 
   afterEach(() => {
     storage.close();
-    try { unlinkSync(dbPath); } catch {}
+    try {
+      unlinkSync(dbPath);
+    } catch {}
   });
 
   test("inserts and retrieves a trace", () => {
@@ -51,9 +53,9 @@ describe("SQLite Storage", () => {
     storage.insertTrace(trace);
     const retrieved = storage.getTrace("trace-1");
     expect(retrieved).not.toBeNull();
-    expect(retrieved!.id).toBe("trace-1");
-    expect(retrieved!.spans).toHaveLength(1);
-    expect(retrieved!.spans[0].name).toBe("anthropic/claude-sonnet-4-5");
+    expect(retrieved?.id).toBe("trace-1");
+    expect(retrieved?.spans).toHaveLength(1);
+    expect(retrieved?.spans[0].name).toBe("anthropic/claude-sonnet-4-5");
   });
 
   test("returns null for non-existent trace", () => {

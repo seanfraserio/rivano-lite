@@ -72,12 +72,7 @@ export interface RivanoConfig {
   agents: AgentConfig[];
 }
 
-export type SpanType =
-  | "llm_call"
-  | "tool_call"
-  | "reasoning"
-  | "retrieval"
-  | "custom";
+export type SpanType = "llm_call" | "tool_call" | "reasoning" | "retrieval" | "custom";
 
 export interface PipelineMetadata {
   ip?: string;

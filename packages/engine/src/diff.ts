@@ -12,10 +12,7 @@ export interface AgentDiff {
   changes?: string[];
 }
 
-function detectChanges(
-  current: AgentState,
-  desired: AgentConfig,
-): string[] {
+function detectChanges(current: AgentState, desired: AgentConfig): string[] {
   const changes: string[] = [];
 
   if (current.provider !== desired.model.provider) {
@@ -32,10 +29,7 @@ function detectChanges(
   return changes;
 }
 
-export function computeDiff(
-  desired: AgentConfig[],
-  currentState: DeploymentState,
-): AgentDiff[] {
+export function computeDiff(desired: AgentConfig[], currentState: DeploymentState): AgentDiff[] {
   const diffs: AgentDiff[] = [];
   const desiredNames = new Set<string>();
 
@@ -97,7 +91,7 @@ export function formatDiff(diffs: AgentDiff[]): string {
     switch (diff.action) {
       case "create":
         lines.push(
-          `${ANSI.green}+ ${diff.name}${ANSI.reset}  (${diff.desired!.model.provider}/${diff.desired!.model.name})`,
+          `${ANSI.green}+ ${diff.name}${ANSI.reset}  (${diff.desired?.model.provider}/${diff.desired?.model.name})`,
         );
         break;
       case "update":
@@ -109,14 +103,10 @@ export function formatDiff(diffs: AgentDiff[]): string {
         }
         break;
       case "delete":
-        lines.push(
-          `${ANSI.red}- ${diff.name}${ANSI.reset}  (${diff.current!.provider}/${diff.current!.model})`,
-        );
+        lines.push(`${ANSI.red}- ${diff.name}${ANSI.reset}  (${diff.current?.provider}/${diff.current?.model})`);
         break;
       case "unchanged":
-        lines.push(
-          `${ANSI.gray}= ${diff.name}${ANSI.reset}  ${ANSI.gray}(no changes)${ANSI.reset}`,
-        );
+        lines.push(`${ANSI.gray}= ${diff.name}${ANSI.reset}  ${ANSI.gray}(no changes)${ANSI.reset}`);
         break;
     }
   }

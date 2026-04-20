@@ -1,9 +1,9 @@
-import type { FastifyInstance } from "fastify";
-import { readFile, writeFile, rename } from "fs/promises";
-import YAML from "js-yaml";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { interpolateEnvVars, validateConfig } from "@rivano/core";
-import { CONFIG_PATH, API_KEY } from "../state.js";
+import type { FastifyInstance } from "fastify";
+import YAML from "js-yaml";
 import type { ServerState } from "../state.js";
+import { getApiKey, getConfigPath } from "../state.js";
 import { withLock } from "../utils/lock.js";
 
 export function sanitizeYamlObj(obj: unknown): unknown {
@@ -17,6 +17,12 @@ export function sanitizeYamlObj(obj: unknown): unknown {
   return clean;
 }
 
+async function writeConfigAtomically(configPath: string, yaml: string): Promise<void> {
+  const tmpPath = `${configPath}.tmp`;
+  await writeFile(tmpPath, yaml, "utf-8");
+  await rename(tmpPath, configPath);
+}
+
 export function registerConfigRoutes(app: FastifyInstance, state: ServerState, reload: () => Promise<void>) {
   // ── Config read (masked) ──────────────────────────────────
   app.get("/api/config", async () => {
@@ -25,21 +31,21 @@ export function registerConfigRoutes(app: FastifyInstance, state: ServerState, r
       const p = provider as Record<string, unknown>;
       if (p.api_key && typeof p.api_key === "string") {
         const key = p.api_key as string;
-        p.api_key = key.length > 8 ? key.slice(0, 4) + "****" : "****";
+        p.api_key = key.length > 8 ? `${key.slice(0, 4)}****` : "****";
       }
     }
     return masked;
   });
 
   // ── Config read (raw) — always requires auth, even when API_KEY is not set globally ──
-  app.get("/api/config/raw", async (request, reply) => {
-    if (!API_KEY) {
+  app.get("/api/config/raw", async (_request, reply) => {
+    if (!getApiKey()) {
       return reply.status(401).send({ error: "Set RIVANO_API_KEY environment variable to access raw config" });
     }
     try {
-      const raw = await readFile(CONFIG_PATH, "utf-8");
+      const raw = await readFile(getConfigPath(), "utf-8");
       return { yaml: raw };
-    } catch (err) {
+    } catch (_err) {
       // Config file doesn't exist yet — return the in-memory default as YAML
       const defaultYaml = YAML.dump(state.config, { lineWidth: -1, noRefs: true });
       return { yaml: defaultYaml };
@@ -62,13 +68,28 @@ export function registerConfigRoutes(app: FastifyInstance, state: ServerState, r
       const parsed = sanitizeYamlObj(YAML.load(interpolated, { schema: YAML.JSON_SCHEMA }));
       validateConfig(parsed);
 
-      return withLock(async () => {
-        // Write atomically (tmp + rename)
-        const tmpPath = CONFIG_PATH + ".tmp";
-        await writeFile(tmpPath, yaml, "utf-8");
-        await rename(tmpPath, CONFIG_PATH);
+      return await withLock(async () => {
+        const configPath = getConfigPath();
+        let previousYaml: string | null = null;
+        let hadPreviousYaml = false;
 
-        await reload();
+        try {
+          previousYaml = await readFile(configPath, "utf-8");
+          hadPreviousYaml = true;
+        } catch {}
+
+        await writeConfigAtomically(configPath, yaml);
+
+        try {
+          await reload();
+        } catch (reloadError) {
+          if (hadPreviousYaml && previousYaml !== null) {
+            await writeConfigAtomically(configPath, previousYaml);
+          } else {
+            await rm(configPath, { force: true });
+          }
+          throw reloadError;
+        }
 
         state.bufferLog("info", "Config updated via WebUI — services reloaded");
         return { ok: true };

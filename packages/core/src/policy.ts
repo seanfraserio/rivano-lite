@@ -1,5 +1,5 @@
-import type { Policy, PolicyAction, PolicyCondition } from "./types.js";
 import safe from "safe-regex2";
+import type { Policy, PolicyAction, PolicyCondition } from "./types.js";
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -11,10 +11,7 @@ interface PolicyEvalContext {
   piiDetected: boolean;
 }
 
-export function evaluateCondition(
-  condition: PolicyCondition,
-  context: PolicyEvalContext,
-): boolean {
+export function evaluateCondition(condition: PolicyCondition, context: PolicyEvalContext): boolean {
   if (condition.contains !== undefined) {
     // Use word-boundary-aware matching to avoid false positives
     // (e.g., "SSN" should not match inside "assignment")

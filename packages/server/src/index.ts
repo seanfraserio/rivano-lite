@@ -1,16 +1,16 @@
-import { loadConfig, validateConfig, type RivanoConfig } from "@rivano/core";
-import { createProxyServer } from "@rivano/proxy";
-import { createObserverServer, createStorage, type Storage } from "@rivano/observer";
+import { watch } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
+import { resolve } from "node:path";
+import { loadConfig, type RivanoConfig } from "@rivano/core";
 import { deploy } from "@rivano/engine";
-import { watch } from "fs";
-import { readFile, writeFile, stat } from "fs/promises";
-import { resolve } from "path";
-import { timingSafeEqual } from "node:crypto";
-import { type ServerState, type LogEntry, DATA_DIR, CONFIG_PATH, DB_PATH, API_KEY, VERSION } from "./state.js";
+import { createObserverServer, createStorage } from "@rivano/observer";
+import { createProxyServer } from "@rivano/proxy";
+import { getApiKeyWarnings, isAuthenticated } from "./auth.js";
 import { registerConfigRoutes } from "./routes/config.js";
-import { registerTraceRoutes } from "./routes/traces.js";
 import { registerEnvRoutes } from "./routes/env.js";
 import { registerSystemRoutes } from "./routes/system.js";
+import { registerTraceRoutes } from "./routes/traces.js";
+import { CONFIG_PATH, DATA_DIR, DB_PATH, getApiKey, type ServerState, VERSION } from "./state.js";
 import { getBindHost } from "./utils/network.js";
 
 const BANNER = `
@@ -75,8 +75,11 @@ async function startProxy(config: RivanoConfig) {
   state.proxy = await createProxyServer(config.proxy, config.providers, {
     onTrace: (trace) => {
       if (state.storage) {
-        try { state.storage.insertTrace(trace); }
-        catch (err) { state.bufferLog("error", `Failed to store trace: ${err}`); }
+        try {
+          state.storage.insertTrace(trace);
+        } catch (err) {
+          state.bufferLog("error", `Failed to store trace: ${err}`);
+        }
       }
     },
   });
@@ -142,6 +145,13 @@ async function reloadServices() {
     // Roll back to previous config if reload fails
     if (previousConfig) {
       state.config = previousConfig;
+      try {
+        await startProxy(previousConfig);
+        await deployAgents(previousConfig);
+      } catch (rollbackErr) {
+        state.bufferLog("error", `Rollback failed after reload error: ${rollbackErr}`);
+        console.error("[rivano] Rollback failed after reload error:", rollbackErr);
+      }
       state.bufferLog("error", `Reload failed, keeping previous config: ${err}`);
       console.error("[rivano] Reload failed, keeping previous config:", err);
     }
@@ -170,24 +180,13 @@ async function startWebUI() {
   });
 
   // ── API authentication middleware ────────────────────────────
-  if (!API_KEY) {
-    console.warn("[rivano] WARNING: No RIVANO_API_KEY set — API endpoints are unauthenticated!");
-    console.warn("[rivano] Set RIVANO_API_KEY environment variable to secure the API.");
-  } else if (API_KEY.length < 16) {
-    console.warn(`[rivano] WARNING: RIVANO_API_KEY is only ${API_KEY.length} characters — consider using a longer key (≥16 chars) for security.`);
-  }
-
-  function isAuthenticated(authHeader: string | undefined): boolean {
-    if (!API_KEY) return true; // No API key configured = auth disabled
-    if (!authHeader) return false;
-    const expected = `Bearer ${API_KEY}`;
-    if (authHeader.length !== expected.length) return false;
-    return timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
+  for (const warning of getApiKeyWarnings()) {
+    console.warn(warning);
   }
 
   app.addHook("onRequest", async (request, reply) => {
     if (!request.url.startsWith("/api")) return;
-    if (!API_KEY) return;
+    if (!getApiKey()) return;
     if (isAuthenticated(request.headers["authorization"])) return;
     return reply.status(401).send({ error: "Unauthorized: provide a valid API key via Authorization: Bearer <key>" });
   });
@@ -271,9 +270,7 @@ async function shutdown(signal: string) {
   if (state.proxy) shutdowns.push(state.proxy.close());
   if (state.observer) shutdowns.push(state.observer.close());
 
-  const drainTimeout = new Promise<void>((_, reject) =>
-    setTimeout(() => reject(new Error("Drain timeout")), 10_000)
-  );
+  const drainTimeout = new Promise<void>((_, reject) => setTimeout(() => reject(new Error("Drain timeout")), 10_000));
 
   try {
     await Promise.race([Promise.allSettled(shutdowns), drainTimeout]);
@@ -291,7 +288,7 @@ async function main() {
   state.config = await loadAndValidateConfig();
 
   console.log(
-    `[rivano] Config loaded — ${Object.keys(state.config.providers).length} provider(s), ${state.config.proxy.policies.length} policy/policies, ${state.config.agents.length} agent(s)`
+    `[rivano] Config loaded — ${Object.keys(state.config.providers).length} provider(s), ${state.config.proxy.policies.length} policy/policies, ${state.config.agents.length} agent(s)`,
   );
 
   await startObserver(state.config);
@@ -301,8 +298,8 @@ async function main() {
   const configWatcher = watchConfig();
 
   console.log("\n[rivano] All systems operational");
-  console.log(`[rivano] Proxy:    http://localhost:${state.config!.proxy.port}`);
-  console.log(`[rivano] Observer: http://localhost:${state.config!.observer.port}`);
+  console.log(`[rivano] Proxy:    http://localhost:${state.config?.proxy.port}`);
+  console.log(`[rivano] Observer: http://localhost:${state.config?.observer.port}`);
   console.log(`[rivano] WebUI:    http://localhost:${WEBUI_PORT}\n`);
 
   process.on("SIGINT", () => {

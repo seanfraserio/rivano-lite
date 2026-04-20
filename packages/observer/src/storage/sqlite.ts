@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import type { Trace, Span, PipelineMetadata } from "@rivano/core";
+import type { PipelineMetadata, Span, Trace } from "@rivano/core";
 
 export interface ListOptions {
   limit: number;
@@ -83,10 +83,7 @@ function rowToSpan(row: Record<string, unknown>): Span {
   };
 }
 
-function rowToTrace(
-  row: Record<string, unknown>,
-  spans: Span[]
-): Trace {
+function rowToTrace(row: Record<string, unknown>, spans: Span[]): Trace {
   return {
     id: row.id as string,
     source: (row.source as string) ?? undefined,
@@ -203,22 +200,19 @@ export function createStorage(dbPath: string): Storage {
         .get(params as Record<string, string | number>) as { total: number };
 
       const rows = db
-        .prepare(
-          `SELECT * FROM traces ${where} ORDER BY start_time DESC LIMIT $limit OFFSET $offset`
-        )
+        .prepare(`SELECT * FROM traces ${where} ORDER BY start_time DESC LIMIT $limit OFFSET $offset`)
         .all({ ...params, $limit: opts.limit, $offset: opts.offset }) as Record<string, unknown>[];
 
       // Batch-load spans for all traces in a single query (fixes N+1)
       const traceIds = rows.map((r) => r.id as string);
-      const allSpans = traceIds.length > 0
-        ? (db
-            .prepare(
-              `SELECT * FROM spans WHERE trace_id IN (${traceIds.map((_, i) => `$id${i}`).join(",")}) ORDER BY start_time ASC`
-            )
-            .all(
-              Object.fromEntries(traceIds.map((id, i) => [`$id${i}`, id]))
-            ) as Record<string, unknown>[])
-        : [];
+      const allSpans =
+        traceIds.length > 0
+          ? (db
+              .prepare(
+                `SELECT * FROM spans WHERE trace_id IN (${traceIds.map((_, i) => `$id${i}`).join(",")}) ORDER BY start_time ASC`,
+              )
+              .all(Object.fromEntries(traceIds.map((id, i) => [`$id${i}`, id]))) as Record<string, unknown>[])
+          : [];
 
       // Group spans by trace_id
       const spansByTrace = new Map<string, Span[]>();

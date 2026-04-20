@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { validateBaseUrl, filterHeaders, extractHeaders } from "./utils.js";
+import { extractHeaders, filterHeaders, validateBaseUrl } from "./utils.js";
 
 describe("validateBaseUrl", () => {
   test("accepts valid HTTPS URLs", () => {
@@ -49,11 +49,11 @@ describe("filterHeaders", () => {
   test("removes sensitive headers", () => {
     const headers = {
       "content-type": "application/json",
-      "authorization": "Bearer sk-test",
+      authorization: "Bearer sk-test",
       "x-api-key": "sk-test",
-      "host": "api.openai.com",
+      host: "api.openai.com",
       "content-length": "100",
-      "accept": "application/json",
+      accept: "application/json",
     };
     const filtered = filterHeaders(headers);
     expect(filtered["authorization"]).toBeUndefined();
@@ -67,7 +67,7 @@ describe("filterHeaders", () => {
   test("preserves safe headers", () => {
     const headers = {
       "content-type": "application/json",
-      "accept": "application/json",
+      accept: "application/json",
       "x-request-id": "abc123",
     };
     const filtered = filterHeaders(headers);
@@ -76,7 +76,7 @@ describe("filterHeaders", () => {
 
   test("handles case-insensitive header matching", () => {
     const headers = {
-      "Authorization": "Bearer test",
+      Authorization: "Bearer test",
       "X-API-Key": "key123",
     };
     const filtered = filterHeaders(headers);

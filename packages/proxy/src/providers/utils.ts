@@ -1,4 +1,4 @@
-import { resolve as dnsResolve } from "dns/promises";
+import { resolve as dnsResolve } from "node:dns/promises";
 
 const BLOCKED_HEADERS = new Set(["host", "content-length", "x-api-key", "authorization", "x-rivano-provider"]);
 
@@ -49,7 +49,11 @@ export function validateBaseUrl(url: string): void {
   }
 
   // Block direct IP access to private ranges (except localhost for Ollama)
-  if (isPrivateIP(parsed.hostname) && parsed.hostname !== "localhost" && !parsed.hostname.startsWith("host.docker.internal")) {
+  if (
+    isPrivateIP(parsed.hostname) &&
+    parsed.hostname !== "localhost" &&
+    !parsed.hostname.startsWith("host.docker.internal")
+  ) {
     throw new Error(`Blocked private IP in base_url: ${parsed.hostname}`);
   }
 }
@@ -88,9 +92,7 @@ export async function resolveAndValidateUrl(url: string): Promise<void> {
     const addresses = await dnsResolve(hostname);
     for (const addr of addresses) {
       if (isPrivateIP(addr) || BLOCKED_HOSTS.has(addr)) {
-        throw new Error(
-          `DNS rebinding detected: ${hostname} resolves to blocked IP ${addr}`
-        );
+        throw new Error(`DNS rebinding detected: ${hostname} resolves to blocked IP ${addr}`);
       }
     }
     // Cache the validated resolution

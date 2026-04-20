@@ -13,19 +13,16 @@ type TraceQuery = {
   maxCostUsd?: string;
 };
 
-function getTraceCost(trace: {
-  totalCostUsd?: number;
-  spans: Array<{ estimatedCostUsd?: number }>;
-}): number {
+const TRACE_SCAN_BATCH_SIZE = 1000;
+
+function getTraceCost(trace: { totalCostUsd?: number; spans: Array<{ estimatedCostUsd?: number }> }): number {
   if (typeof trace.totalCostUsd === "number") {
     return trace.totalCostUsd;
   }
   return trace.spans.reduce((sum, span) => sum + (span.estimatedCostUsd ?? 0), 0);
 }
 
-function getTraceModel(trace: {
-  spans: Array<{ metadata?: Record<string, unknown> }>;
-}): string | undefined {
+function getTraceModel(trace: { spans: Array<{ metadata?: Record<string, unknown> }> }): string | undefined {
   for (const span of trace.spans) {
     const model = span.metadata?.model;
     if (typeof model === "string" && model.length > 0) {
@@ -35,9 +32,7 @@ function getTraceModel(trace: {
   return undefined;
 }
 
-function getTraceStatus(trace: {
-  spans: Array<{ metadata?: Record<string, unknown> }>;
-}): TraceStatus {
+function getTraceStatus(trace: { spans: Array<{ metadata?: Record<string, unknown> }> }): TraceStatus {
   let warned = false;
   for (const span of trace.spans) {
     const action = span.metadata?.action;
@@ -57,41 +52,65 @@ export function registerTraceRoutes(app: FastifyInstance, state: ServerState) {
     Querystring: TraceQuery;
   }>("/api/traces", async (request) => {
     if (!state.storage) return { traces: [], total: 0 };
-    const {
-      limit = "50",
-      offset = "0",
-      source,
-      since,
-      model,
-      status,
-      minCostUsd,
-      maxCostUsd,
-    } = request.query;
+    const { limit = "50", offset = "0", source, since, model, status, minCostUsd, maxCostUsd } = request.query;
     const parsedLimit = Math.min(parseInt(limit, 10) || 50, 1000);
     const parsedOffset = Math.max(parseInt(offset, 10) || 0, 0);
-    const base = state.storage.listTraces({
-      limit: 5000,
-      offset: 0,
-      source: source || undefined,
-      since: since ? parseInt(since, 10) : undefined,
-    });
+    const sourceFilter = source || undefined;
+    const sinceFilter = since ? parseInt(since, 10) : undefined;
+    const hasDerivedFilters = Boolean(model || status || minCostUsd || maxCostUsd);
 
-    const filtered = base.traces.filter((trace) => {
-      if (model && getTraceModel(trace) !== model) {
-        return false;
+    if (!hasDerivedFilters) {
+      return state.storage.listTraces({
+        limit: parsedLimit,
+        offset: parsedOffset,
+        source: sourceFilter,
+        since: sinceFilter,
+      });
+    }
+
+    const filtered: ReturnType<typeof state.storage.listTraces>["traces"] = [];
+    let scanOffset = 0;
+    let total = 0;
+
+    while (true) {
+      const batch = state.storage.listTraces({
+        limit: TRACE_SCAN_BATCH_SIZE,
+        offset: scanOffset,
+        source: sourceFilter,
+        since: sinceFilter,
+      });
+      total = batch.total;
+      if (batch.traces.length === 0) {
+        break;
       }
-      if (status && getTraceStatus(trace) !== status) {
-        return false;
+
+      for (const trace of batch.traces) {
+        const matches = (() => {
+          if (model && getTraceModel(trace) !== model) {
+            return false;
+          }
+          if (status && getTraceStatus(trace) !== status) {
+            return false;
+          }
+          const cost = getTraceCost(trace);
+          if (minCostUsd && cost < parseFloat(minCostUsd)) {
+            return false;
+          }
+          if (maxCostUsd && cost > parseFloat(maxCostUsd)) {
+            return false;
+          }
+          return true;
+        })();
+        if (matches) {
+          filtered.push(trace);
+        }
       }
-      const cost = getTraceCost(trace);
-      if (minCostUsd && cost < parseFloat(minCostUsd)) {
-        return false;
+
+      scanOffset += batch.traces.length;
+      if (scanOffset >= total) {
+        break;
       }
-      if (maxCostUsd && cost > parseFloat(maxCostUsd)) {
-        return false;
-      }
-      return true;
-    });
+    }
 
     return {
       traces: filtered.slice(parsedOffset, parsedOffset + parsedLimit),

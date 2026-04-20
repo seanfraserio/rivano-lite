@@ -1,7 +1,7 @@
 import type { AgentConfig, Provider } from "@rivano/core";
 import type { DiffAction } from "./diff.js";
 import { computeDiff } from "./diff.js";
-import { loadState, saveState, hashConfig } from "./state.js";
+import { hashConfig, loadState, saveState } from "./state.js";
 
 export interface DeployResult {
   agent: string;
@@ -15,16 +15,9 @@ interface DeployOptions {
   dryRun?: boolean;
 }
 
-const SUPPORTED_PROVIDERS: Set<Provider> = new Set([
-  "anthropic",
-  "openai",
-  "ollama",
-  "bedrock",
-]);
+const SUPPORTED_PROVIDERS: Set<Provider> = new Set(["anthropic", "openai", "ollama", "bedrock"]);
 
-export function validate(
-  agents: AgentConfig[],
-): { valid: boolean; errors: Array<{ agent: string; error: string }> } {
+export function validate(agents: AgentConfig[]): { valid: boolean; errors: Array<{ agent: string; error: string }> } {
   const errors: Array<{ agent: string; error: string }> = [];
 
   for (const agent of agents) {
@@ -56,19 +49,13 @@ export function validate(
         error: "Missing required field: system_prompt",
       });
     }
-    if (
-      agent.model?.temperature !== undefined &&
-      (agent.model.temperature < 0 || agent.model.temperature > 2)
-    ) {
+    if (agent.model?.temperature !== undefined && (agent.model.temperature < 0 || agent.model.temperature > 2)) {
       errors.push({
         agent: label,
         error: `Temperature must be between 0 and 2, got ${agent.model.temperature}`,
       });
     }
-    if (
-      agent.model?.max_tokens !== undefined &&
-      agent.model.max_tokens <= 0
-    ) {
+    if (agent.model?.max_tokens !== undefined && agent.model.max_tokens <= 0) {
       errors.push({
         agent: label,
         error: `max_tokens must be positive, got ${agent.model.max_tokens}`,

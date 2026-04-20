@@ -1,8 +1,8 @@
-import Fastify, { type FastifyInstance } from "fastify";
 import type { ObserverConfig, Trace } from "@rivano/core";
-import { createStorage, type Storage } from "./storage/sqlite.js";
-import { evaluateLatency } from "./evaluators/latency.js";
+import Fastify, { type FastifyInstance } from "fastify";
 import { evaluateCost } from "./evaluators/cost.js";
+import { evaluateLatency } from "./evaluators/latency.js";
+import { createStorage, type Storage } from "./storage/sqlite.js";
 
 export interface ObserverServerOptions {
   storage?: Storage;
@@ -11,7 +11,7 @@ export interface ObserverServerOptions {
 export function createObserverServer(
   config: ObserverConfig,
   dbPath: string,
-  options?: ObserverServerOptions
+  options?: ObserverServerOptions,
 ): FastifyInstance {
   const server = Fastify({ logger: true, bodyLimit: 5 * 1024 * 1024 }); // 5MB max
   const ownsStorage = !options?.storage;

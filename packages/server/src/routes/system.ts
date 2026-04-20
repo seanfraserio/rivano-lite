@@ -1,10 +1,9 @@
+import { stat } from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
-import { stat } from "fs/promises";
-import { DATA_DIR, CONFIG_PATH, DB_PATH, VERSION } from "../state.js";
 import type { ServerState } from "../state.js";
+import { CONFIG_PATH, DATA_DIR, DB_PATH, VERSION } from "../state.js";
 
 export function registerSystemRoutes(app: FastifyInstance, state: ServerState) {
-
   // ── Health ─────────────────────────────────────────────────
   app.get("/health", async () => ({
     status: "ok",
@@ -25,16 +24,20 @@ export function registerSystemRoutes(app: FastifyInstance, state: ServerState) {
       dataDir: DATA_DIR,
       version: VERSION,
       uptime: Math.floor((Date.now() - state.startedAt) / 1000),
-      proxy: cfg ? {
-        port: cfg.proxy.port,
-        providers: Object.keys(cfg.providers),
-        policies: cfg.proxy.policies.length,
-      } : null,
-      observer: cfg ? {
-        port: cfg.observer.port,
-        storage: cfg.observer.storage,
-        retentionDays: cfg.observer.retention_days,
-      } : null,
+      proxy: cfg
+        ? {
+            port: cfg.proxy.port,
+            providers: Object.keys(cfg.providers),
+            policies: cfg.proxy.policies.length,
+          }
+        : null,
+      observer: cfg
+        ? {
+            port: cfg.observer.port,
+            storage: cfg.observer.storage,
+            retentionDays: cfg.observer.retention_days,
+          }
+        : null,
       agents: Array.from(state.agents.values())
         .filter((a) => a.config)
         .map((a) => ({

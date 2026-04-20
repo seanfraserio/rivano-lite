@@ -23,9 +23,7 @@ export function estimateCost(model: string, tokensIn: number, tokensOut: number)
   const p = MODEL_PRICING[model] ?? DEFAULT_PRICING;
   return (
     Math.round(
-      ((tokensIn / 1_000_000) * p.inputPerMillion +
-        (tokensOut / 1_000_000) * p.outputPerMillion) *
-        1_000_000,
+      ((tokensIn / 1_000_000) * p.inputPerMillion + (tokensOut / 1_000_000) * p.outputPerMillion) * 1_000_000,
     ) / 1_000_000
   );
 }

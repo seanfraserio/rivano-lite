@@ -1,7 +1,7 @@
-import type { PipelineContext, PipelineResult, AuditEntry, Trace, Span } from "@rivano/core";
+import { appendFile } from "node:fs/promises";
+import type { AuditEntry, PipelineContext, PipelineResult, Span, Trace } from "@rivano/core";
 import { estimateCost } from "@rivano/core";
 import type { Middleware } from "../pipeline.js";
-import { appendFile } from "node:fs/promises";
 
 interface AuditConfig {
   output?: "stdout" | "file";
@@ -19,9 +19,7 @@ export function createAuditMiddleware(config?: AuditConfig): Middleware {
 
     if (ctx.metadata.redacted) return "redacted";
 
-    const hasWarning = ctx.decisions.some(
-      (d) => d.reason && d.reason.startsWith("Warning"),
-    );
+    const hasWarning = ctx.decisions.some((d) => d.reason?.startsWith("Warning"));
     if (hasWarning) return "warned";
 
     return "allowed";
@@ -55,7 +53,7 @@ export function createAuditMiddleware(config?: AuditConfig): Middleware {
       const line = JSON.stringify(entry);
 
       if (output === "file") {
-        await appendFile(filePath, line + "\n").catch((err) => {
+        await appendFile(filePath, `${line}\n`).catch((err) => {
           console.error("[rivano] Failed to write audit log:", err);
         });
       } else {

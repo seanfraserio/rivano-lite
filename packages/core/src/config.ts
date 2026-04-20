@@ -1,6 +1,6 @@
-import { z } from "zod";
-import yaml from "js-yaml";
 import { readFile } from "node:fs/promises";
+import yaml from "js-yaml";
+import { z } from "zod";
 import type { RivanoConfig } from "./types.js";
 
 const ProviderSchema = z.enum(["anthropic", "openai", "ollama", "bedrock"]);
@@ -94,9 +94,11 @@ export function interpolateEnvVars(text: string, options: InterpolateEnvVarsOpti
   });
 
   if (missing.length > 0) {
-    console.warn(`[rivano] Warning: Unset environment variables: ${missing.join(", ")}. ` +
-      "These were left as placeholders. Providers with unresolved API keys will fail. " +
-      "Set these in your .env file or environment.");
+    console.warn(
+      `[rivano] Warning: Unset environment variables: ${missing.join(", ")}. ` +
+        "These were left as placeholders. Providers with unresolved API keys will fail. " +
+        "Set these in your .env file or environment.",
+    );
   }
 
   if (options.strict && missing.length > 0) {

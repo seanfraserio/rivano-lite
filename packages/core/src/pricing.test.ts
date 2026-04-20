@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { estimateCost, MODEL_PRICING, DEFAULT_PRICING } from "./pricing.js";
+import { DEFAULT_PRICING, estimateCost, MODEL_PRICING } from "./pricing.js";
 
 describe("estimateCost", () => {
   test("calculates cost for known model", () => {
@@ -56,7 +56,7 @@ describe("MODEL_PRICING", () => {
   });
 
   test("each model has input and output pricing", () => {
-    for (const [model, pricing] of Object.entries(MODEL_PRICING)) {
+    for (const [_model, pricing] of Object.entries(MODEL_PRICING)) {
       expect(typeof pricing.inputPerMillion).toBe("number");
       expect(typeof pricing.outputPerMillion).toBe("number");
       expect(pricing.inputPerMillion).toBeGreaterThan(0);

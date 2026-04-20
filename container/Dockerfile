@@ -9,7 +9,7 @@ FROM oven/bun:1-alpine AS builder
 WORKDIR /build
 
 # Copy workspace config first (cache layer for deps)
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json bun.lock ./
 COPY packages/core/package.json packages/core/
 COPY packages/proxy/package.json packages/proxy/
 COPY packages/observer/package.json packages/observer/

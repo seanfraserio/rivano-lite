@@ -1,5 +1,5 @@
-import type { Policy, PipelineContext, PipelineResult } from "@rivano/core";
-import { evaluatePolicies, redactPii, extractMessageText, detectPii } from "@rivano/core";
+import type { PipelineContext, PipelineResult, Policy } from "@rivano/core";
+import { detectPii, evaluatePolicies, extractMessageText, redactPii } from "@rivano/core";
 import type { Middleware } from "../pipeline.js";
 
 function extractText(ctx: PipelineContext, phase: "request" | "response"): string {
@@ -38,10 +38,7 @@ function extractText(ctx: PipelineContext, phase: "request" | "response"): strin
   return extractMessageText(ctx.messages);
 }
 
-export function createPolicyMiddleware(
-  policies: Policy[],
-  phase: "request" | "response",
-): Middleware {
+export function createPolicyMiddleware(policies: Policy[], phase: "request" | "response"): Middleware {
   const phasePolicies = policies.filter((p) => p.on === phase);
 
   return {
@@ -80,8 +77,7 @@ export function createPolicyMiddleware(
           ctx.metadata.blockedBy = result.matchedPolicy?.name;
           ctx.metadata.blockReason = result.message;
           ctx.metadata.statusCode = 403;
-          ctx.metadata.errorMessage =
-            result.message ?? `Blocked by policy: ${result.matchedPolicy?.name}`;
+          ctx.metadata.errorMessage = result.message ?? `Blocked by policy: ${result.matchedPolicy?.name}`;
           return "block";
 
         case "redact":

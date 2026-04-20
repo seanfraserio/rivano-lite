@@ -1,6 +1,6 @@
-import { readFile, writeFile, rename, mkdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import type { AgentConfig } from "@rivano/core";
 
 export interface AgentState {
@@ -34,10 +34,7 @@ export async function loadState(statePath: string): Promise<DeploymentState> {
   }
 }
 
-export async function saveState(
-  statePath: string,
-  state: DeploymentState,
-): Promise<void> {
+export async function saveState(statePath: string, state: DeploymentState): Promise<void> {
   const dir = dirname(statePath);
   await mkdir(dir, { recursive: true });
 
@@ -52,14 +49,11 @@ function sortedStringify(value: unknown): string {
   if (value === null || value === undefined) return JSON.stringify(value);
   if (typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) {
-    return "[" + value.map(sortedStringify).join(",") + "]";
+    return `[${value.map(sortedStringify).join(",")}]`;
   }
   const keys = Object.keys(value as Record<string, unknown>).sort();
-  const entries = keys.map(
-    (k) =>
-      `${JSON.stringify(k)}:${sortedStringify((value as Record<string, unknown>)[k])}`,
-  );
-  return "{" + entries.join(",") + "}";
+  const entries = keys.map((k) => `${JSON.stringify(k)}:${sortedStringify((value as Record<string, unknown>)[k])}`);
+  return `{${entries.join(",")}}`;
 }
 
 export function hashConfig(agent: AgentConfig): string {

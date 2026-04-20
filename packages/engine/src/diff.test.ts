@@ -1,6 +1,6 @@
-import { describe, expect, test, beforeEach } from "bun:test";
-import { computeDiff, formatDiff } from "./diff.js";
+import { describe, expect, test } from "bun:test";
 import type { AgentConfig } from "@rivano/core";
+import { computeDiff, formatDiff } from "./diff.js";
 import type { DeploymentState } from "./state.js";
 import { hashConfig } from "./state.js";
 
@@ -145,7 +145,15 @@ describe("formatDiff", () => {
 
   test("formats create action", () => {
     const result = formatDiff([
-      { name: "new-agent", action: "create", desired: { name: "new-agent", model: { provider: "anthropic", name: "claude-haiku-4-5" }, system_prompt: "test" } },
+      {
+        name: "new-agent",
+        action: "create",
+        desired: {
+          name: "new-agent",
+          model: { provider: "anthropic", name: "claude-haiku-4-5" },
+          system_prompt: "test",
+        },
+      },
     ]);
     expect(result).toContain("new-agent");
     expect(result).toContain("1 to create");
@@ -153,7 +161,18 @@ describe("formatDiff", () => {
 
   test("formats delete action", () => {
     const result = formatDiff([
-      { name: "old-agent", action: "delete", current: { name: "old-agent", configHash: "x", deployedAt: "2024", version: 1, provider: "anthropic", model: "claude" } },
+      {
+        name: "old-agent",
+        action: "delete",
+        current: {
+          name: "old-agent",
+          configHash: "x",
+          deployedAt: "2024",
+          version: 1,
+          provider: "anthropic",
+          model: "claude",
+        },
+      },
     ]);
     expect(result).toContain("old-agent");
     expect(result).toContain("1 to delete");
@@ -161,8 +180,17 @@ describe("formatDiff", () => {
 
   test("includes summary counts", () => {
     const result = formatDiff([
-      { name: "a", action: "create" as const, desired: { name: "a", model: { provider: "anthropic", name: "claude-haiku-4-5" }, system_prompt: "x" } },
-      { name: "b", action: "unchanged" as const, current: { name: "b", configHash: "x", deployedAt: "2024", version: 1, provider: "openai", model: "gpt-4o" }, desired: { name: "b", model: { provider: "openai", name: "gpt-4o" }, system_prompt: "x" } },
+      {
+        name: "a",
+        action: "create" as const,
+        desired: { name: "a", model: { provider: "anthropic", name: "claude-haiku-4-5" }, system_prompt: "x" },
+      },
+      {
+        name: "b",
+        action: "unchanged" as const,
+        current: { name: "b", configHash: "x", deployedAt: "2024", version: 1, provider: "openai", model: "gpt-4o" },
+        desired: { name: "b", model: { provider: "openai", name: "gpt-4o" }, system_prompt: "x" },
+      },
     ]);
     expect(result).toContain("1 to create");
     expect(result).toContain("1 unchanged");

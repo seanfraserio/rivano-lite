@@ -1,6 +1,6 @@
 import type { ProviderConfig } from "@rivano/core";
 import type { ProviderResponse } from "./types.js";
-import { filterHeaders, extractHeaders, validateBaseUrl, resolveAndValidateUrl } from "./utils.js";
+import { extractHeaders, filterHeaders, resolveAndValidateUrl, validateBaseUrl } from "./utils.js";
 
 const PROVIDER_TIMEOUT_MS = 30_000; // 30 second default timeout
 

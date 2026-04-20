@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { evaluateCost, estimateSpanCost } from "./cost.js";
+import type { Span, Trace } from "@rivano/core";
+import { estimateSpanCost, evaluateCost } from "./cost.js";
 import { evaluateLatency } from "./latency.js";
-import type { Trace, Span } from "@rivano/core";
 
 describe("evaluateLatency", () => {
   test("scores 1.0 for fast traces", () => {
@@ -58,9 +58,7 @@ describe("evaluateLatency", () => {
     const trace: Trace = {
       id: "t1",
       startTime: 0,
-      spans: [
-        { id: "s1", traceId: "t1", type: "llm_call", name: "s1", startTime: 0, endTime: 2000 },
-      ],
+      spans: [{ id: "s1", traceId: "t1", type: "llm_call", name: "s1", startTime: 0, endTime: 2000 }],
     };
     const result = evaluateLatency(trace);
     expect(result.score).toBeGreaterThan(0);
@@ -141,9 +139,7 @@ describe("evaluateCost", () => {
       id: "t1",
       startTime: 0,
       endTime: 100,
-      spans: [
-        { id: "s1", traceId: "t1", type: "llm_call", name: "test", startTime: 0, endTime: 100 },
-      ],
+      spans: [{ id: "s1", traceId: "t1", type: "llm_call", name: "test", startTime: 0, endTime: 100 }],
     };
     const result = evaluateCost(trace);
     expect(result.score).toBe(0);

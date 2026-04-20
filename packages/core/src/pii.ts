@@ -54,10 +54,7 @@ export function detectPii(
   return { found: matches.length > 0, matches };
 }
 
-export function redactPii(
-  text: string,
-  patterns: PiiPattern[] = DEFAULT_PII_PATTERNS,
-): string {
+export function redactPii(text: string, patterns: PiiPattern[] = DEFAULT_PII_PATTERNS): string {
   let result = text;
 
   for (const p of patterns) {

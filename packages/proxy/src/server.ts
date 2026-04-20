@@ -1,21 +1,23 @@
-import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyReply } from "fastify";
+import type { ChatMessage, PipelineContext, Provider, ProviderConfig, ProxyConfig, Trace } from "@rivano/core";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
-import type { ProxyConfig, ProviderConfig, PipelineContext, Provider, Trace, ChatMessage } from "@rivano/core";
-import { Pipeline } from "./pipeline.js";
-import { createRateLimitMiddleware } from "./middleware/rate-limit.js";
+import { createAuditMiddleware } from "./middleware/audit.js";
+import { createCacheMiddleware } from "./middleware/cache.js";
 import { createInjectionMiddleware } from "./middleware/injection.js";
 import { createPolicyMiddleware } from "./middleware/policy.js";
-import { createCacheMiddleware } from "./middleware/cache.js";
-import { createAuditMiddleware } from "./middleware/audit.js";
+import { createRateLimitMiddleware } from "./middleware/rate-limit.js";
+import { Pipeline } from "./pipeline.js";
 import { createProvider, detectProvider, type ProviderFn, type ProviderResponse } from "./providers/index.js";
 
-const ProxyRequestBodySchema = z.object({
-  model: z.string().optional(),
-  messages: z.array(z.record(z.unknown())).optional(),
-  stream: z.boolean().optional(),
-  temperature: z.number().min(0).max(2).optional(),
-  max_tokens: z.number().int().positive().optional(),
-}).passthrough();
+const ProxyRequestBodySchema = z
+  .object({
+    model: z.string().optional(),
+    messages: z.array(z.record(z.unknown())).optional(),
+    stream: z.boolean().optional(),
+    temperature: z.number().min(0).max(2).optional(),
+    max_tokens: z.number().int().positive().optional(),
+  })
+  .passthrough();
 
 interface ProxyStats {
   requests: number;
@@ -83,7 +85,9 @@ export function createProxyServer(
       (request.headers["x-rivano-provider"] as string) ?? detectProvider(path) ?? config.default_provider;
 
     if (!providerName) {
-      return reply.status(400).send({ error: "Unable to detect provider from path and no default_provider configured" });
+      return reply
+        .status(400)
+        .send({ error: "Unable to detect provider from path and no default_provider configured" });
     }
 
     const providerFn = providerFns.get(providerName);

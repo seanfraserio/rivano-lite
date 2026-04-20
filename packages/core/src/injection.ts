@@ -51,7 +51,8 @@ const INJECTION_PATTERNS: Array<{
   },
   {
     name: "disregard_directive",
-    pattern: /(?:disregard|forget|ignore)\s+(?:all\s+)?(?:previous|prior|above|earlier)\s*(?:instructions|rules|context|directives)?/i,
+    pattern:
+      /(?:disregard|forget|ignore)\s+(?:all\s+)?(?:previous|prior|above|earlier)\s*(?:instructions|rules|context|directives)?/i,
     weight: 0.85,
   },
   {

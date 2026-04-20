@@ -1,23 +1,35 @@
 import { describe, expect, test } from "bun:test";
-import { evaluateCondition, evaluatePolicy, evaluatePolicies } from "./policy.js";
+import { evaluateCondition, evaluatePolicies, evaluatePolicy } from "./policy.js";
 import type { Policy, PolicyCondition } from "./types.js";
 
 describe("evaluateCondition", () => {
   test("matches contains condition", () => {
     const condition: PolicyCondition = { contains: "secret" };
-    const result = evaluateCondition(condition, { text: "This is a secret message", injectionScore: 0, piiDetected: false });
+    const result = evaluateCondition(condition, {
+      text: "This is a secret message",
+      injectionScore: 0,
+      piiDetected: false,
+    });
     expect(result).toBe(true);
   });
 
   test("does not match contains when text lacks the word", () => {
     const condition: PolicyCondition = { contains: "secret" };
-    const result = evaluateCondition(condition, { text: "This is a public message", injectionScore: 0, piiDetected: false });
+    const result = evaluateCondition(condition, {
+      text: "This is a public message",
+      injectionScore: 0,
+      piiDetected: false,
+    });
     expect(result).toBe(false);
   });
 
   test("matches regex condition", () => {
     const condition: PolicyCondition = { regex: "password\\s*=" };
-    const result = evaluateCondition(condition, { text: "the password = abc123", injectionScore: 0, piiDetected: false });
+    const result = evaluateCondition(condition, {
+      text: "the password = abc123",
+      injectionScore: 0,
+      piiDetected: false,
+    });
     expect(result).toBe(true);
   });
 
@@ -68,7 +80,7 @@ describe("evaluateCondition", () => {
 
   test("truncates text to 10K chars before matching contains", () => {
     const condition: PolicyCondition = { contains: "needle" };
-    const text = "A".repeat(20_000) + "needle";
+    const text = `${"A".repeat(20_000)}needle`;
     expect(evaluateCondition(condition, { text, injectionScore: 0, piiDetected: false })).toBe(false);
   });
 });
@@ -116,7 +128,11 @@ describe("evaluatePolicies", () => {
       { name: "block-passwords", on: "request", condition: { contains: "password" }, action: "block" },
       { name: "warn-secrets", on: "request", condition: { contains: "secret" }, action: "warn" },
     ];
-    const result = evaluatePolicies(policies, { text: "What is the password and secret?", injectionScore: 0, piiDetected: false });
+    const result = evaluatePolicies(policies, {
+      text: "What is the password and secret?",
+      injectionScore: 0,
+      piiDetected: false,
+    });
     expect(result.action).toBe("block");
     expect(result.matchedPolicy?.name).toBe("block-passwords");
   });

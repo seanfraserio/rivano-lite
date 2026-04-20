@@ -15,7 +15,9 @@
     "typecheck": {
       "dependsOn": ["^build"]
     },
-    "lint": {},
+    "lint": {
+      "inputs": ["packages/*/src/**/*.{ts,tsx,js,jsx}"]
+    },
     "clean": {
       "cache": false
     }

@@ -7,6 +7,8 @@ let writeLock = Promise.resolve();
 export function withLock<T>(fn: () => Promise<T>): Promise<T> {
   const prev = writeLock;
   let resolve: () => void;
-  writeLock = new Promise((r) => { resolve = r; });
-  return prev.then(() => fn()).finally(() => resolve!());
+  writeLock = new Promise((r) => {
+    resolve = r;
+  });
+  return prev.then(() => fn()).finally(() => resolve?.());
 }
