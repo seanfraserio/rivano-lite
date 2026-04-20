@@ -5,47 +5,52 @@ import type { ServerState } from "../state.js";
 import { registerConfigRoutes, sanitizeYamlObj } from "./config.js";
 
 describe("sanitizeYamlObj", () => {
-  test("removes __proto__ from objects", () => {
-    const obj = { __proto__: { evil: true }, safe: "value" };
+  test("removes own enumerable __proto__ property", () => {
+    // Plain objects { __proto__: { evil: true } } set the prototype, not an own property.
+    // Object.entries() won't enumerate it, so sanitizeYamlObj can't filter it.
+    // Use Object.defineProperty to create an actual own enumerable property:
+    const obj = { safe: "value" };
+    Object.defineProperty(obj, "__proto__", { value: { evil: true }, enumerable: true, configurable: true });
     const sanitized = sanitizeYamlObj(obj);
-    expect(sanitized).not.toHaveProperty("__proto__");
+    expect(sanitized.hasOwnProperty("__proto__")).toBe(false);
     expect((sanitized as Record<string, unknown>).safe).toBe("value");
   });
 
-  test("removes constructor from objects", () => {
-    const obj = { constructor: "evil", safe: "value" };
+  test("removes own enumerable constructor property", () => {
+    const obj = { constructor: { evil: true }, safe: "value" };
     const sanitized = sanitizeYamlObj(obj);
-    expect(sanitized).not.toHaveProperty("constructor");
+    expect(sanitized.hasOwnProperty("constructor")).toBe(false);
     expect((sanitized as Record<string, unknown>).safe).toBe("value");
   });
 
-  test("removes prototype from objects", () => {
+  test("removes own enumerable prototype property", () => {
     const obj = { prototype: "evil", safe: "value" };
     const sanitized = sanitizeYamlObj(obj);
-    expect(sanitized).not.toHaveProperty("prototype");
+    expect(sanitized.hasOwnProperty("prototype")).toBe(false);
   });
 
-  test("sanitizes nested objects", () => {
-    const obj = {
-      level1: {
-        __proto__: { evil: true },
-        level2: {
-          constructor: "evil",
-          safe: "value",
-        },
-      },
-    };
+  test("recursively sanitizes nested objects", () => {
+    const inner = { constructor: { evil: true }, safe: "value" };
+    const level1 = { safe: "level1" };
+    Object.defineProperty(level1, "__proto__", { value: { evil: true }, enumerable: true, configurable: true });
+    Object.defineProperty(level1, "level2", { value: inner, enumerable: true });
+    const obj = { level1 };
+
     const sanitized = sanitizeYamlObj(obj);
     const result = sanitized as Record<string, unknown>;
-    expect(result.level1).not.toHaveProperty("__proto__");
-    expect((result.level1 as Record<string, unknown>).level2).not.toHaveProperty("constructor");
+    expect(result.level1.hasOwnProperty("__proto__")).toBe(false);
+    expect((result.level1 as Record<string, unknown>).level2.hasOwnProperty("constructor")).toBe(false);
     expect((result.level1 as Record<string, unknown>).level2).toHaveProperty("safe", "value");
   });
 
-  test("sanitizes arrays", () => {
-    const obj = [{ __proto__: "evil" }, { safe: "value" }];
+  test("recursively sanitizes arrays", () => {
+    const obj1 = { safe: "value" };
+    Object.defineProperty(obj1, "__proto__", { value: "evil", enumerable: true, configurable: true });
+    const obj2 = { constructor: "evil", safe: "value" };
+    const obj = [obj1, obj2];
     const sanitized = sanitizeYamlObj(obj) as Array<Record<string, unknown>>;
-    expect(sanitized[0]).not.toHaveProperty("__proto__");
+    expect(sanitized[0].hasOwnProperty("__proto__")).toBe(false);
+    expect(sanitized[1].hasOwnProperty("constructor")).toBe(false);
     expect(sanitized[1]).toHaveProperty("safe", "value");
   });
 
@@ -118,7 +123,8 @@ describe("registerConfigRoutes", () => {
 
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body);
-    expect(body.providers.openai.api_key).toBe("sk-*");
+    // Masking: first 4 chars + '****'
+    expect(body.providers.openai.api_key).toBe("sk-t****");
   });
 
   test("GET /api/config masks short keys entirely", async () => {
@@ -210,7 +216,7 @@ agents: []
     expect(body.errors.length).toBeGreaterThan(0);
   });
 
-  test("POST /api/config/validate rejects missing yaml field", async () => {
+  test("POST /api/config/validate returns 400 when yaml field is missing", async () => {
     registerConfigRoutes(app, state, async () => {});
 
     const response = await app.inject({
@@ -220,9 +226,11 @@ agents: []
       payload: { something: "else" },
     });
 
-    expect(response.statusCode).toBe(200);
+    // Route returns 400 status when yaml field is missing
+    expect(response.statusCode).toBe(400);
     const body = JSON.parse(response.body);
     expect(body.valid).toBe(false);
+    expect(body.errors).toContain("Missing yaml field");
   });
 
   test("PUT /api/config rejects missing yaml field", async () => {
